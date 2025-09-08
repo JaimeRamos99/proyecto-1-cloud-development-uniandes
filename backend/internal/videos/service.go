@@ -1,26 +1,31 @@
 package videos
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"mime/multipart"
+	"time"
 
 	"proyecto1/root/internal/ObjectStorage"
 	"proyecto1/root/internal/http/dto"
+	"proyecto1/root/internal/messaging"
 )
 
 type Service struct {
 	repo           *Repository
 	validator      *FFProbeValidator
 	storageManager *ObjectStorage.FileStorageManager
+	messageQueue   messaging.MessageQueue
 }
 
-func NewService(repo *Repository, storageManager *ObjectStorage.FileStorageManager) *Service {
+func NewService(repo *Repository, storageManager *ObjectStorage.FileStorageManager, messageQueue messaging.MessageQueue) *Service {
 	validator := NewFFProbeValidator("/tmp") // Use /tmp for temp files in container
 	return &Service{
 		repo:           repo,
 		validator:      validator,
 		storageManager: storageManager,
+		messageQueue:   messageQueue,
 	}
 }
 
@@ -60,6 +65,14 @@ func (s *Service) UploadVideo(file *multipart.FileHeader, title string, userID i
 	s3Key, err := s.uploadVideoToStorage(file, createdVideo.ID, userID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to upload video to storage: %w", err)
+	} 
+
+	// Send video processing message to message queue
+	err = s.sendVideoProcessingMessage(s3Key)
+	if err != nil {
+		// Log the error but don't fail the upload - the video is already saved
+		// In production, you might want to implement retry logic or dead letter queue
+		fmt.Printf("Warning: Failed to send message queue message for video %d: %v\n", createdVideo.ID, err)
 	}
 
 	// Return success response with S3 information
@@ -115,6 +128,20 @@ func (s *Service) GetVideoDownloadURL(s3Key string) (string, error) {
 		return "", fmt.Errorf("failed to generate download URL: %w", err)
 	}
 	return url, nil
+}
+
+// sendVideoProcessingMessage sends a message to message queue for video processing
+func (s *Service) sendVideoProcessingMessage(s3Key string) error {
+	// Create simple video processing message with just the S3 key
+	message := &messaging.VideoProcessingMessage{
+		S3Key: s3Key,
+	}
+
+	// Send message to message queue with context timeout
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	return s.messageQueue.SendMessage(ctx, message)
 }
 
 // CheckFFProbeInstallation verifies that FFprobe is properly installed

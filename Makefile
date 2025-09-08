@@ -65,9 +65,7 @@ rebuild-api:
 	docker-compose -f docker-compose.local.yml build api
 	docker-compose -f docker-compose.local.yml up -d api
 	@echo "✅ API container rebuilt and restarted"
-	@echo "⏳ Waiting 10s for container to stabilize..."
-	@sleep 10
-	@make api-logs
+	@echo "💡 Run 'make api-logs' if you want to see the logs"
 
 # Show all logs
 logs:

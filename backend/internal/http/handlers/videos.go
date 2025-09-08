@@ -8,6 +8,8 @@ import (
 	"proyecto1/root/internal/config"
 	"proyecto1/root/internal/database"
 	"proyecto1/root/internal/http/dto"
+	"proyecto1/root/internal/messaging"
+	messagingProviders "proyecto1/root/internal/messaging/providers"
 	"proyecto1/root/internal/videos"
 
 	"github.com/gin-gonic/gin"
@@ -22,9 +24,12 @@ func NewVideoHandler(db *database.DB, cfg *config.Config) *VideoHandler {
 	// Create storage manager based on configuration
 	storageManager := createStorageManager(cfg)
 	
-	// Create repository and service with storage manager
+	// Create message queue service
+	messageQueue := createMessageQueue(cfg)
+	
+	// Create repository and service with storage manager and message queue
 	repo := videos.NewRepository(db)
-	service := videos.NewService(repo, storageManager)
+	service := videos.NewService(repo, storageManager, messageQueue)
 	
 	return &VideoHandler{
 		videoService: service,
@@ -49,6 +54,18 @@ func createStorageManager(cfg *config.Config) *ObjectStorage.FileStorageManager 
 	}
 	
 	return ObjectStorage.NewFileStorageManager(s3Provider)
+}
+
+// createMessageQueue creates message queue service based on configuration
+func createMessageQueue(cfg *config.Config) messaging.MessageQueue {
+	// For now, we only have SQS implementation
+	// In the future, you can add logic to choose between different providers
+	// based on configuration (e.g., cfg.Messaging.Provider)
+	messageQueue, err := messagingProviders.NewSQSQueue(&cfg.AWS)
+	if err != nil {
+		panic("Failed to create message queue service: " + err.Error())
+	}
+	return messageQueue
 }
 
 // UploadVideo handles video upload with authentication and validation
