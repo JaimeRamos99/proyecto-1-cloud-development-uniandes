@@ -92,25 +92,44 @@ func (r *Repository) GetVideosByUserID(userID int) ([]*Video, error) {
 }
 
 // SoftDeleteVideo marks a video as deleted by setting deleted_at timestamp
+// Only allows deletion of private videos (is_public = false)
 func (r *Repository) SoftDeleteVideo(videoID int, userID int) error {
-	query := `
+	// First, check if video exists and get its details
+	checkQuery := `
+		SELECT is_public 
+		FROM videos 
+		WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL`
+	
+	var isPublic bool
+	err := r.db.QueryRow(checkQuery, videoID, userID).Scan(&isPublic)
+	if err != nil {
+		return fmt.Errorf("video not found or not owned by user")
+	}
+
+	// Check if video is public (cannot be deleted)
+	if isPublic {
+		return fmt.Errorf("public videos cannot be deleted")
+	}
+
+	// Proceed with soft delete for private videos only
+	deleteQuery := `
 		UPDATE videos 
 		SET deleted_at = NOW()
-		WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL`
+		WHERE id = $1 AND user_id = $2 AND is_public = false AND deleted_at IS NULL`
 
-	result, err := r.db.Exec(query, videoID, userID)
+	result, err := r.db.Exec(deleteQuery, videoID, userID)
 	if err != nil {
 		return fmt.Errorf("failed to soft delete video: %w", err)
 	}
 
-	// Check if any rows were affected
+	// Check if any rows were affected (should be 1 if successful)
 	rowsAffected, err := result.RowsAffected()
 	if err != nil {
 		return fmt.Errorf("failed to check affected rows: %w", err)
 	}
 
 	if rowsAffected == 0 {
-		return fmt.Errorf("video not found or not owned by user")
+		return fmt.Errorf("video deletion failed - video may be public or not found")
 	}
 
 	return nil

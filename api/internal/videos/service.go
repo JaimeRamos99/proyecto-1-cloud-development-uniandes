@@ -201,11 +201,13 @@ func (s *Service) GetUserVideos(userID int) ([]*dto.VideoResponse, error) {
 }
 
 // DeleteVideo performs soft delete on a video (only updates deleted_at, doesn't touch S3)
+// Only allows deletion of private videos (is_public = false)
 func (s *Service) DeleteVideo(videoID int, userID int) error {
-	// Perform soft delete in the database
+	// Perform soft delete in the database (with public video validation)
 	err := s.repo.SoftDeleteVideo(videoID, userID)
 	if err != nil {
-		return fmt.Errorf("failed to delete video: %w", err)
+		// Pass through the specific error messages from repository
+		return err
 	}
 
 	// Note: We intentionally do NOT delete files from S3 as per requirements

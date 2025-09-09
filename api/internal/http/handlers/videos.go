@@ -226,9 +226,15 @@ func (h *VideoHandler) DeleteVideo(c *gin.Context) {
 	// Call service to delete video
 	err = h.videoService.DeleteVideo(videoID, userID)
 	if err != nil {
-		if err.Error() == "failed to delete video: video not found or not owned by user" {
+		errMsg := err.Error()
+		
+		if strings.Contains(errMsg, "video not found or not owned by user") {
 			c.JSON(http.StatusNotFound, dto.ErrorResponse{
 				Error: "Video not found or not accessible",
+			})
+		} else if strings.Contains(errMsg, "public videos cannot be deleted") {
+			c.JSON(http.StatusForbidden, dto.ErrorResponse{
+				Error: "Public videos cannot be deleted. Only private videos can be removed.",
 			})
 		} else {
 			c.JSON(http.StatusInternalServerError, dto.ErrorResponse{
