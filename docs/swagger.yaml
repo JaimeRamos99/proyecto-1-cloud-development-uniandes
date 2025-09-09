@@ -429,18 +429,6 @@ paths:
             type: integer
             minimum: 0
           description: Maximum number of total votes
-        - in: query
-          name: min_videos
-          schema:
-            type: integer
-            minimum: 0
-          description: Minimum number of videos uploaded
-        - in: query
-          name: max_videos
-          schema:
-            type: integer
-            minimum: 0
-          description: Maximum number of videos uploaded
       responses:
         "200":
           description: Paginated list of player rankings

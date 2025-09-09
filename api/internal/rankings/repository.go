@@ -46,18 +46,6 @@ func (r *Repository) GetPlayerRankings(filters RankingFilters, pagination Pagina
 		argIndex++
 	}
 
-	if filters.MinVideos != nil {
-		whereClauses = append(whereClauses, fmt.Sprintf("video_count >= $%d", argIndex))
-		args = append(args, *filters.MinVideos)
-		argIndex++
-	}
-
-	if filters.MaxVideos != nil {
-		whereClauses = append(whereClauses, fmt.Sprintf("video_count <= $%d", argIndex))
-		args = append(args, *filters.MaxVideos)
-		argIndex++
-	}
-
 	var whereClause string
 	if len(whereClauses) > 0 {
 		whereClause = "WHERE " + strings.Join(whereClauses, " AND ")

@@ -23,8 +23,6 @@ type RankingFilters struct {
 	City        string `form:"city"`
 	MinVotes    *int   `form:"min_votes"`
 	MaxVotes    *int   `form:"max_votes"`
-	MinVideos   *int   `form:"min_videos"`
-	MaxVideos   *int   `form:"max_videos"`
 }
 
 // PaginationParams represents pagination parameters
