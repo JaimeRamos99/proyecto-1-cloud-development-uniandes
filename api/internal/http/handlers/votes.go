@@ -9,6 +9,7 @@ import (
 
 	"proyecto1/root/internal/database"
 	"proyecto1/root/internal/http/dto"
+	"proyecto1/root/internal/rankings"
 	"proyecto1/root/internal/votes"
 
 	"github.com/gin-gonic/gin"
@@ -16,16 +17,22 @@ import (
 )
 
 type VoteHandler struct {
-	voteService *votes.Service
+	voteService    *votes.Service
+	rankingService *rankings.Service
 }
 
 func NewVoteHandler(db *database.DB) *VoteHandler {
-	// Create repository and service
-	repo := votes.NewRepository(db)
-	service := votes.NewService(repo)
+	// Create vote repository and service
+	voteRepo := votes.NewRepository(db)
+	voteService := votes.NewService(voteRepo)
+	
+	// Create ranking repository and service  
+	rankingRepo := rankings.NewRepository(db)
+	rankingService := rankings.NewService(rankingRepo)
 	
 	return &VoteHandler{
-		voteService: service,
+		voteService:    voteService,
+		rankingService: rankingService,
 	}
 }
 
@@ -84,10 +91,17 @@ func (h *VoteHandler) VoteForVideo(c *gin.Context) {
 		voteCount = 0
 	}
 
+	// Refresh player rankings to include the new vote
+	err = h.rankingService.RefreshRankings()
+	if err != nil {
+		// Log error but don't fail the response since the vote was successful
+		log.Printf("Failed to refresh rankings after vote: %v", err)
+	}
+
 	// Return success response
 	response := &dto.VoteResponse{
 		Success:   true,
-		Message:   "Vote cast successfully",
+		Message:   "Your vote has been counted! Thanks for supporting great content and shaping the rankings.",
 		VideoID:   videoID,
 		UserID:    userID,
 		VotedAt:   time.Now(),
@@ -149,10 +163,17 @@ func (h *VoteHandler) UnvoteForVideo(c *gin.Context) {
 		voteCount = 0
 	}
 
+	// Refresh player rankings to reflect the removed vote
+	err = h.rankingService.RefreshRankings()
+	if err != nil {
+		// Log error but don't fail the response since the unvote was successful
+		log.Printf("Failed to refresh rankings after unvote: %v", err)
+	}
+
 	// Return success response
 	response := &dto.UnvoteResponse{
 		Success:   true,
-		Message:   "Vote removed successfully",
+		Message:   "Your vote has been removed and the rankings have been updated.",
 		VideoID:   videoID,
 		UserID:    userID,
 		VoteCount: voteCount,
