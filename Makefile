@@ -19,6 +19,7 @@ help:
 	@echo "  localstack-health - Check LocalStack services health (S3, SQS)"
 	@echo "  localstack-test - Test LocalStack setup (create/list S3 buckets, SQS queues)"
 	@echo "  storage-test    - Test file storage functionality with ObjectStorage"
+	@echo "  test-startup    - Test service startup order and dependencies"
 	@echo "  test-api        - Test API endpoints with sample requests"
 	@echo "  stop            - Stop all containers (keeps volumes)"
 	@echo "  clean           - NUCLEAR: Stop and remove EVERYTHING (containers, volumes, networks, images)"
@@ -203,6 +204,11 @@ storage-test:
 	@echo '   provider, _ := providers.NewS3Provider(s3Config)'
 	@echo '   manager := ObjectStorage.NewFileStorageManager(provider)'
 	@echo '   err := manager.UploadFile([]byte("test"), "test-file.txt")'
+
+# Test startup order and service dependencies
+test-startup:
+	@echo "🧪 Testing service startup order and dependencies..."
+	@./test-startup-order.sh
 
 # Test API endpoints with sample requests
 test-api:

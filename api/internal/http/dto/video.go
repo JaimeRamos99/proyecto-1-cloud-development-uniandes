@@ -37,3 +37,30 @@ type PublicVideoResponse struct {
 	ProcessedURL string     `json:"processed_url"`
 	Votes        int        `json:"votes"`
 }
+
+// PlayerRankingResponse represents a single player in the rankings
+type PlayerRankingResponse struct {
+	UserID            int     `json:"user_id"`
+	FirstName         string  `json:"first_name"`
+	LastName          string  `json:"last_name"`
+	Email             string  `json:"email"`
+	City              string  `json:"city"`
+	Country           string  `json:"country"`
+	TotalVotes        int     `json:"total_votes"`
+	Ranking           int     `json:"ranking"`
+	LastUpdated       time.Time `json:"last_updated"`
+}
+
+// PlayerRankingsResponse represents the paginated response for rankings
+type PlayerRankingsResponse struct {
+	Rankings   []PlayerRankingResponse `json:"rankings"`
+	Pagination PaginationResponse      `json:"pagination"`
+}
+
+// PaginationResponse represents pagination metadata
+type PaginationResponse struct {
+	CurrentPage int   `json:"current_page"`
+	PageSize    int   `json:"page_size"`
+	TotalItems  int64 `json:"total_items"`
+	TotalPages  int   `json:"total_pages"`
+}

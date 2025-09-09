@@ -25,6 +25,7 @@ func NewRouter(cfg *config.Config, db *database.DB) *gin.Engine {
 	authHandler := handlers.NewAuthHandler(db, cfg, sessionStore)
 	videoHandler := handlers.NewVideoHandler(db, cfg)
 	voteHandler := handlers.NewVoteHandler(db)
+	rankingHandler := handlers.NewRankingHandler(db)
 	healthHandler := handlers.NewHealthHandler(db, videoHandler)
 
 	// Initialize auth middleware with shared session store
@@ -61,6 +62,11 @@ func NewRouter(cfg *config.Config, db *database.DB) *gin.Engine {
 			// Vote endpoints require authentication
 			public.POST("/videos/:video_id/vote", authMiddleware, voteHandler.VoteForVideo)
 			public.DELETE("/videos/:video_id/vote", authMiddleware, voteHandler.UnvoteForVideo)
+			
+			// Rankings endpoints (no authentication required)
+			public.GET("/rankings", rankingHandler.GetPlayerRankings)
+			public.GET("/rankings/:user_id", rankingHandler.GetPlayerRanking)
+			public.POST("/rankings/refresh", rankingHandler.RefreshPlayerRankings) // Manual refresh endpoint
 		}
 	}
 	

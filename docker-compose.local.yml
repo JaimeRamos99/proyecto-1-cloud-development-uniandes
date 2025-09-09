@@ -15,6 +15,7 @@ services:
       - ./db/002_create_video_table.sql:/docker-entrypoint-initdb.d/002_create_video_table.sql
       - ./db/003_add_is_public_to_videos.sql:/docker-entrypoint-initdb.d/003_add_is_public_to_videos.sql
       - ./db/004_create_votes_table.sql:/docker-entrypoint-initdb.d/004_create_votes_table.sql
+      - ./db/005_create_player_rankings_view.sql:/docker-entrypoint-initdb.d/005_create_player_rankings_view.sql
       # Persist data in local volume
       - postgres_local_data:/var/lib/postgresql/data
     networks:
@@ -65,10 +66,17 @@ services:
     networks:
       - proyecto0-local-network
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:4566/_localstack/health"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
+      test:
+        [
+          "CMD",
+          "sh",
+          "-c",
+          "curl -f http://localhost:4566/_localstack/health | grep -q 'sqs.*running'",
+        ]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 30s
 
   api:
     build:
@@ -120,6 +128,20 @@ services:
     networks:
       - proyecto0-local-network
     restart: unless-stopped
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "wget",
+          "--quiet",
+          "--tries=1",
+          "--spider",
+          "http://localhost:8080/api/health",
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 45s
 
   worker:
     build:
@@ -156,7 +178,7 @@ services:
       localstack:
         condition: service_healthy
       api:
-        condition: service_started
+        condition: service_healthy
     networks:
       - proyecto0-local-network
     restart: unless-stopped
