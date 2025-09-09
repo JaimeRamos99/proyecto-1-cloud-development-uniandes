@@ -14,10 +14,10 @@ env:
 
 jobs:
   # ============================================================================
-  # BUILD & TEST
+  # API VALIDATION
   # ============================================================================
-  build-and-test:
-    name: Build and Test
+  api-validation:
+    name: API Validation
     runs-on: ubuntu-latest
 
     services:
@@ -44,14 +44,13 @@ jobs:
         with:
           go-version: ${{ env.GO_VERSION }}
 
-      # API Module
-      - name: 📦 Download dependencies - API
+      - name: 📦 Download dependencies
         working-directory: ./api
         run: |
           go mod download
           go mod verify
 
-      - name: 🎨 Format check - API
+      - name: 🎨 Format check
         working-directory: ./api
         run: |
           if [ "$(gofmt -l . | wc -l)" -gt 0 ]; then
@@ -61,82 +60,77 @@ jobs:
           fi
           echo "✅ Code is properly formatted"
 
-      - name: 🔍 Vet check - API
+      - name: 🔍 Vet check
         working-directory: ./api
         run: go vet ./...
 
-      - name: 🧪 Run tests - API
+      - name: 🧪 Run tests
         working-directory: ./api
         env:
           DATABASE_URL: postgres://postgres:postgres@localhost:5432/proyecto_1_test?sslmode=disable
         run: go test -v ./...
 
-      - name: 🔨 Build - API
+      - name: 🔨 Build
         working-directory: ./api
         run: go build -o bin/api ./cmd/api
 
-      # Worker Module
-      - name: 📦 Download dependencies - Worker
-        working-directory: ./worker
-        run: |
-          go mod download
-          go mod verify
-
-      - name: 🎨 Format check - Worker
-        working-directory: ./worker
-        run: |
-          if [ "$(gofmt -l . | wc -l)" -gt 0 ]; then
-            echo "❌ Code is not properly formatted"
-            gofmt -l .
-            exit 1
-          fi
-          echo "✅ Code is properly formatted"
-
-      - name: 🔍 Vet check - Worker
-        working-directory: ./worker
-        run: go vet ./...
-
-      - name: 🧪 Run tests - Worker
-        working-directory: ./worker
-        env:
-          DATABASE_URL: postgres://postgres:postgres@localhost:5432/proyecto_1_test?sslmode=disable
-        run: go test -v ./...
-
-      - name: 🔨 Build - Worker
-        working-directory: ./worker
-        run: go build -o bin/worker ./cmd/worker
-
-      - name: 📤 Upload build artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: binaries
-          path: |
-            api/bin/api
-            worker/bin/worker
-          retention-days: 7
-
   # ============================================================================
-  # DOCKER BUILD (only on main branch)
+  # WORKER VALIDATION
   # ============================================================================
-  docker-build:
-    name: Docker Build
+  worker-validation:
+    name: Worker Validation
     runs-on: ubuntu-latest
-    needs: build-and-test
-    if: github.ref == 'refs/heads/main'
+
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_DB: proyecto_1_test
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: 🐳 Build API Docker image
-        run: |
-          cd api
-          docker build -t proyecto1-api:latest .
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: ${{ env.GO_VERSION }}
 
-      - name: 🐳 Build Worker Docker image
+      - name: 📦 Download dependencies
+        working-directory: ./worker
         run: |
-          cd worker
-          docker build -t proyecto1-worker:latest .
+          go mod download
+          go mod verify
 
-      - name: ✅ Docker build completed
-        run: echo "✅ All Docker images built successfully"
+      - name: 🎨 Format check
+        working-directory: ./worker
+        run: |
+          if [ "$(gofmt -l . | wc -l)" -gt 0 ]; then
+            echo "❌ Code is not properly formatted"
+            gofmt -l .
+            exit 1
+          fi
+          echo "✅ Code is properly formatted"
+
+      - name: 🔍 Vet check
+        working-directory: ./worker
+        run: go vet ./...
+
+      - name: 🧪 Run tests
+        working-directory: ./worker
+        env:
+          DATABASE_URL: postgres://postgres:postgres@localhost:5432/proyecto_1_test?sslmode=disable
+        run: go test -v ./...
+
+      - name: 🔨 Build
+        working-directory: ./worker
+        run: go build -o bin/worker ./cmd/worker
