@@ -94,24 +94,45 @@ The worker uses the same environment variables as the api service:
 
 ## Development
 
-### Adding Video Processing Logic
+### Video Processing Implementation ✅ COMPLETED
 
-The current video processing is a placeholder in `internal/service.go`:
+The worker now implements **complete video processing** with all requirements:
 
-```go
-func (s *WorkerService) processVideo(videoData []byte, video *videos.Video) ([]byte, error) {
-    // TODO: Replace this with actual video processing logic
-    // Current implementation just returns original data
+#### 🎯 **Implemented Features:**
 
-    // Add your video processing logic here:
-    // - Video transcoding
-    // - Compression
-    // - Watermark addition
-    // - Format conversion
-    // - Any other video processing operations
+1. **Duration Clipping**: Automatically limits videos to **30 seconds maximum**
+2. **Resolution & Aspect Ratio**: Converts to **1280x720 (720p)** with **16:9 aspect ratio**
+3. **No Content Cropping**: Uses **Opción B** - maintains all original content with black bars if needed
+4. **Audio Removal**: Completely removes audio tracks (`-an`)
+5. **ANB Watermark**: Adds ANB logo in top-right corner with 10px margin
+6. **File Management**: Preserves original in `original/` folder, saves processed in `processed/`
 
-    return videoData, nil
-}
+#### 🔧 **Processing Pipeline:**
+
+```
+1. Download from S3 → 2. Backup to original/ → 3. Process with FFmpeg → 4. Upload to processed/ → 5. Update DB status
+```
+
+#### 📋 **FFmpeg Command Used:**
+
+```bash
+ffmpeg -i input.mp4 -i watermark.png \
+  -t 30 \
+  -filter_complex "[0:v]scale=1280:720:force_original_aspect_ratio=decrease,pad=1280:720:(ow-iw)/2:(oh-ih)/2:black[scaled];[scaled][1:v]overlay=main_w-overlay_w-10:10" \
+  -an -c:v libx264 -crf 23 -preset medium -pix_fmt yuv420p -movflags +faststart \
+  output.mp4
+```
+
+#### 🎨 **Visual Result Example:**
+
+```
+Original 4:3 video → Final 16:9 (1280x720):
+┌────────────────────────────────────────┐
+│▓▓│                              │▓▓│   │ ← Black bars (no content loss)
+│▓▓│     COMPLETE VIDEO           │▓▓│   │
+│▓▓│     CONTENT PRESERVED        │▓▓│ANB│ ← ANB watermark
+│▓▓│     (Opción B)               │▓▓│   │
+└────────────────────────────────────────┘
 ```
 
 ### Testing
@@ -140,3 +161,46 @@ Monitor the worker through:
 - Database status updates
 - SQS queue metrics (through LocalStack or AWS Console)
 - Container health: `make health`
+
+### Log Output Examples:
+
+```
+Processing video ID 123: Original->original/123.mp4, Processed->processed/123.mp4
+Processing video file (ID: 123, Size: 15728640 bytes) - applying transformations
+Starting video processing for ID 123 with Opción B (sin recorte)
+Executing FFmpeg with Opción B (sin recorte): ffmpeg -i /tmp/input_123.mp4 -i /app/assets/watermark.png -t 30 ...
+Video processing completed for ID 123. Original: 15728640 bytes, Processed: 8234567 bytes
+Successfully processed video: 123 (Original: original/123.mp4, Processed: processed/123.mp4)
+Transformations applied: ≤30s, 1280x720, 16:9, no audio, ANB watermark, no content cropping
+```
+
+## File Structure After Processing
+
+```
+S3 Bucket Layout:
+├── original/
+│   ├── 1.mp4          ← Original uploaded videos (preserved)
+│   ├── 2.mp4
+│   └── ...
+├── processed/
+│   ├── 1.mp4          ← Processed videos (30s, 720p, 16:9, no audio, ANB watermark)
+│   ├── 2.mp4
+│   └── ...
+└── [legacy files]     ← Original upload location (for backwards compatibility)
+```
+
+## Testing the Complete Pipeline
+
+1. **Start all services**: `make local`
+2. **Upload a video** through the API:
+   ```bash
+   curl -X POST http://localhost:80/api/videos/upload \
+     -H "Authorization: Bearer YOUR_JWT" \
+     -F "file=@test_video.mp4" \
+     -F "title=Test Video"
+   ```
+3. **Monitor processing**: `make worker-logs`
+4. **Check results**:
+   - Original video: `original/{video_id}.mp4`
+   - Processed video: `processed/{video_id}.mp4`
+   - Database status: `processed`

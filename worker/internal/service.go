@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"strconv"
 	"strings"
 	"time"
 
@@ -98,51 +99,73 @@ func (s *WorkerService) processMessage(ctx context.Context, msg *messaging.Recei
 	if err != nil {
 		return fmt.Errorf("failed to unmarshal message: %w", err)
 	}
-	
-	log.Printf("Processing video with S3 key: %s", videoMsg.S3Key)
-	
-	// Get video record from database using S3 key
-	video, err := s.videoRepo.GetVideoByS3Key(videoMsg.S3Key)
+
+	// Extract video ID and verify status before processing
+	videoID := s.extractVideoIDFromS3Key(videoMsg.S3Key)
+	if videoID <= 0 {
+		log.Printf("Could not extract valid video ID from S3 key: %s - skipping processing", videoMsg.S3Key)
+		return nil // Skip processing, message will be deleted
+	}
+
+	// Get video from database - MUST exist for processing
+	video, err := s.videoRepo.GetVideoByID(videoID)
 	if err != nil {
-		return fmt.Errorf("failed to get video by S3 key: %w", err)
+		log.Printf("Video %d not found in database: %v - skipping processing", videoID, err)
+		return nil // Skip processing if video doesn't exist in database
+	}
+
+	// Check video status - only process if uploaded
+	if video.Status == videos.StatusProcessed {
+		log.Printf("Video %d is already processed, skipping processing", videoID)
+		return nil // Skip processing if already processed
 	}
 	
-	// Check if video is in the correct status for processing
 	if video.Status != videos.StatusUploaded {
-		log.Printf("Video %d is not in uploaded status (current: %s), skipping", video.ID, video.Status)
-		return nil // Don't return an error - just skip this message
+		log.Printf("Video %d has status '%s', expected '%s' for processing - skipping", videoID, video.Status, videos.StatusUploaded)
+		return nil // Skip processing if not in uploaded status
 	}
 	
-	// Download the video file from S3
+	log.Printf("Video %d found with status '%s', proceeding with processing", videoID, video.Status)
+
 	log.Printf("Downloading video file: %s", videoMsg.S3Key)
 	videoData, err := s.storageManager.DownloadFile(videoMsg.S3Key)
 	if err != nil {
 		return fmt.Errorf("failed to download video from S3: %w", err)
 	}
 	
-	// Process the video (placeholder for now)
-	log.Printf("Processing video file (ID: %d, Size: %d bytes)", video.ID, len(videoData))
-	processedData, err := s.processVideo(videoData, video)
+	// Generate processed key (API sends "original/123.mp4", we want "processed/123.mp4")
+	processedKey := s.generateProcessedS3Key(videoMsg.S3Key)
+	
+	log.Printf("Processing video: Original S3 key: %s -> Processed S3 key: %s", videoMsg.S3Key, processedKey)
+	
+	// Process video with VideoProcessor
+	log.Printf("Processing video file (Size: %d bytes) - applying transformations", len(videoData))
+	processor := NewVideoProcessor()
+	processedData, err := processor.ProcessVideoByS3Key(videoData, videoMsg.S3Key)
 	if err != nil {
 		return fmt.Errorf("failed to process video: %w", err)
 	}
 	
-	// Upload the processed video to S3 with "processed/" prefix
-	processedS3Key := s.generateProcessedS3Key(videoMsg.S3Key)
-	log.Printf("Uploading processed video to S3: %s (original: %s)", processedS3Key, videoMsg.S3Key)
-	err = s.storageManager.UploadFile(processedData, processedS3Key)
+	// Upload processed video to processed/ location (keeping original in original/)
+	log.Printf("Uploading processed video to: %s", processedKey)
+	err = s.storageManager.UploadFile(processedData, processedKey)
 	if err != nil {
-		return fmt.Errorf("failed to upload processed video to S3: %w", err)
+		return fmt.Errorf("failed to upload processed video: %w", err)
 	}
 	
-	// Update video status to processed
-	log.Printf("Updating video status to processed: %d", video.ID)
-	err = s.videoRepo.UpdateVideoStatus(video.ID, videos.StatusProcessed)
-	if err != nil {
-		return fmt.Errorf("failed to update video status: %w", err)
+	// Update video status to processed - use already extracted videoID
+	if videoID > 0 {
+		log.Printf("Updating video status to processed: %d", videoID)
+		err = s.videoRepo.UpdateVideoStatus(videoID, videos.StatusProcessed)
+		if err != nil {
+			log.Printf("Warning: failed to update video status: %v", err)
+			// Don't fail the entire process for DB update failure
+		}
 	}
 	
-	log.Printf("Successfully processed video: %d", video.ID)
+	log.Printf("Successfully processed video (Original: %s, Processed: %s)", 
+		videoMsg.S3Key, processedKey)
+	log.Printf("Transformations applied: ≤30s, 1280x720, 16:9, no audio, ANB watermark, ANB bumpers, no content cropping")
 	return nil
 }
 
@@ -158,26 +181,25 @@ func (s *WorkerService) generateProcessedS3Key(originalS3Key string) string {
 	return fmt.Sprintf("processed/%s", originalS3Key)
 }
 
-// processVideo performs the actual video processing (placeholder implementation)
-func (s *WorkerService) processVideo(videoData []byte, video *videos.Video) ([]byte, error) {
-	log.Printf("Processing video ID %d (placeholder implementation)", video.ID)
+// extractVideoIDFromS3KeyForDB extracts video ID from S3 key only for database updates
+func (s *WorkerService) extractVideoIDFromS3Key(s3Key string) int {
+	// Remove path prefixes if present (e.g., "original/123.mp4" -> "123.mp4")
+	filename := s3Key
+	if lastSlash := strings.LastIndex(s3Key, "/"); lastSlash >= 0 {
+		filename = s3Key[lastSlash+1:]
+	}
 	
-	// TODO: Replace this with actual video processing logic
-	// For now, we'll just return the original data unchanged
-	// This is where you would add:
-	// - Video transcoding
-	// - Compression
-	// - Watermark addition
-	// - Format conversion
-	// - Any other video processing operations
+	// Extract ID from filename (e.g., "123.mp4" -> "123")
+	if dotIndex := strings.LastIndex(filename, "."); dotIndex > 0 {
+		idStr := filename[:dotIndex]
+		if videoID, err := strconv.Atoi(idStr); err == nil {
+			return videoID
+		}
+	}
 	
-	// Simulate some processing time
-	time.Sleep(2 * time.Second)
-	
-	log.Printf("Video processing completed for ID %d", video.ID)
-	return videoData, nil
+	return 0 // Return 0 if extraction fails - DB update will be skipped
 }
-
+  
 // Close gracefully shuts down the worker service
 func (s *WorkerService) Close() error {
 	log.Println("Closing worker service...")

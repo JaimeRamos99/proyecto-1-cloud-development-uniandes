@@ -42,7 +42,7 @@ if err != nil {
 storageManager := ObjectStorage.NewFileStorageManager(s3Provider)
 
 // Usar
-fileContent := []byte("contenido del archivo")
+fileContent := []byte("file content")
 err = storageManager.UploadFile(fileContent, "videos/mi-video.mp4")
 ```
 
@@ -90,7 +90,7 @@ type IFileStorageProvider interface {
 
 ```go
 func (vs *VideoService) ProcessVideo(storageManager *ObjectStorage.FileStorageManager) {
-    // Tu lógica no sabe ni le importa dónde se guarda el archivo
+    // Your logic doesn't know or care where the file is stored
     thumbnail := generateThumbnail()
     err := storageManager.UploadFile(thumbnail, "thumbnails/video123.jpg")
 

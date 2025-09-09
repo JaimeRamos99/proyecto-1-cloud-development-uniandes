@@ -1,7 +1,10 @@
 package handlers
 
 import (
+	"log"
 	"net/http"
+	"strconv"
+	"strings"
 
 	"proyecto1/root/internal/ObjectStorage"
 	"proyecto1/root/internal/ObjectStorage/providers"
@@ -92,8 +95,26 @@ func (h *VideoHandler) UploadVideo(c *gin.Context) {
 		return
 	}
 
+	// Get is_public from form data (required field)
+	isPublicStr := c.PostForm("is_public")
+	if isPublicStr == "" {
+		c.JSON(http.StatusBadRequest, dto.ErrorResponse{
+			Error: "is_public field is required",
+		})
+		return
+	}
+
+	// Parse is_public boolean value using strconv.ParseBool (more robust)
+	isPublic, parseErr := strconv.ParseBool(strings.ToLower(strings.TrimSpace(isPublicStr)))
+	if parseErr != nil {
+		c.JSON(http.StatusBadRequest, dto.ErrorResponse{
+			Error: "is_public must be a valid boolean value (true/false, 1/0, t/f, T/F, TRUE/FALSE)",
+		})
+		return
+	}
+
 	// Call service layer for business logic
-	response, err := h.videoService.UploadVideo(file, title, userID)
+	response, err := h.videoService.UploadVideo(file, title, isPublic, userID)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, dto.ErrorResponse{
 			Error: err.Error(),
@@ -102,4 +123,124 @@ func (h *VideoHandler) UploadVideo(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusCreated, response)
+}
+
+// GetVideo retrieves video details with presigned URLs
+func (h *VideoHandler) GetVideo(c *gin.Context) {
+	// Get user ID from JWT claims
+	claims := c.MustGet("claims").(jwt.MapClaims)
+	userID := int(claims["user_id"].(float64))
+
+	// Get video ID from URL parameter
+	videoIDStr := c.Param("video_id")
+	if videoIDStr == "" {
+		c.JSON(http.StatusBadRequest, dto.ErrorResponse{
+			Error: "Video ID is required",
+		})
+		return
+	}
+
+	// Convert video ID to integer
+	videoID, err := strconv.Atoi(videoIDStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, dto.ErrorResponse{
+			Error: "Invalid video ID format",
+		})
+		return
+	}
+
+	// Get video details and URLs from service (with user validation)
+	video, originalURL, processedURL, err := h.videoService.GetVideo(videoID, userID)
+	if err != nil {
+		c.JSON(http.StatusNotFound, dto.ErrorResponse{
+			Error: "Video not found or not accessible",
+		})
+		return
+	}
+
+	// Create response with all required fields
+	response := &dto.VideoResponse{
+		VideoID:      video.ID,
+		Title:        video.Title,
+		Status:       video.Status,
+		IsPublic:     video.IsPublic,
+		UploadedAt:   video.UploadedAt,
+		ProcessedAt:  video.ProcessedAt,
+		OriginalURL:  originalURL,
+		ProcessedURL: processedURL,
+		Votes:        0,
+	}
+
+	// Log for debugging (can be removed in production)
+	log.Printf("User %d accessed video %d", userID, videoID)
+
+	c.JSON(http.StatusOK, response)
+}
+
+// GetUserVideos retrieves all videos for the authenticated user
+func (h *VideoHandler) GetUserVideos(c *gin.Context) {
+	// Get user ID from JWT claims
+	claims := c.MustGet("claims").(jwt.MapClaims)
+	userID := int(claims["user_id"].(float64))
+
+	// Get all videos for the user from service
+	videos, err := h.videoService.GetUserVideos(userID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, dto.ErrorResponse{
+			Error: "Failed to retrieve user videos",
+		})
+		return
+	}
+
+	// Log for debugging (can be removed in production)
+	log.Printf("User %d retrieved %d videos", userID, len(videos))
+
+	// Return the list of videos
+	c.JSON(http.StatusOK, videos)
+}
+
+// DeleteVideo handles soft deletion of a video
+func (h *VideoHandler) DeleteVideo(c *gin.Context) {
+	// Get user ID from JWT claims
+	claims := c.MustGet("claims").(jwt.MapClaims)
+	userID := int(claims["user_id"].(float64))
+
+	// Get video ID from URL parameter
+	videoIDStr := c.Param("video_id")
+	if videoIDStr == "" {
+		c.JSON(http.StatusBadRequest, dto.ErrorResponse{
+			Error: "Video ID is required",
+		})
+		return
+	}
+
+	// Convert video ID to integer
+	videoID, err := strconv.Atoi(videoIDStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, dto.ErrorResponse{
+			Error: "Invalid video ID format",
+		})
+		return
+	}
+
+	// Call service to delete video
+	err = h.videoService.DeleteVideo(videoID, userID)
+	if err != nil {
+		if err.Error() == "failed to delete video: video not found or not owned by user" {
+			c.JSON(http.StatusNotFound, dto.ErrorResponse{
+				Error: "Video not found or not accessible",
+			})
+		} else {
+			c.JSON(http.StatusInternalServerError, dto.ErrorResponse{
+				Error: "Failed to delete video",
+			})
+		}
+		return
+	}
+
+	// Log for debugging (can be removed in production)
+	log.Printf("User %d deleted video %d", userID, videoID)
+
+	// Return success response with no content
+	c.JSON(http.StatusNoContent, nil)
 }

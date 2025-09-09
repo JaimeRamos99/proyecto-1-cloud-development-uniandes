@@ -22,9 +22,8 @@ RUN CGO_ENABLED=1 GOOS=linux go build -a -installsuffix cgo -o bin/worker cmd/wo
 # Final stage
 FROM alpine:3.18
 
-# Install necessary packages including ffmpeg for video processing
-# (keeping this for future video processing capabilities)
-RUN apk --no-cache add ca-certificates tzdata ffmpeg
+# Install necessary packages including ffmpeg for video processing and ImageMagick for watermark
+RUN apk --no-cache add ca-certificates tzdata ffmpeg imagemagick
 
 # Set working directory
 WORKDIR /root/
@@ -35,11 +34,40 @@ RUN addgroup -S worker && adduser -S worker -G worker
 # Copy the built binary from builder stage
 COPY --from=builder /app/bin/worker ./
 
-# Create directory for temporary files with proper permissions (before switching user)
-RUN mkdir -p /tmp && chmod 755 /tmp
+# Copy assets directory for watermark
+COPY assets/ /app/assets/
 
-# Change ownership to worker user
-RUN chown worker:worker ./worker
+# Create directories with proper permissions (before switching user)
+RUN mkdir -p /tmp && chmod 1777 /tmp
+RUN mkdir -p /app/assets && chmod 755 /app/assets
+
+# Create ANB watermark using ImageMagick only if watermark.png doesn't exist
+RUN if [ ! -f /app/assets/watermark.png ]; then \
+    convert -size 200x50 xc:none \
+        -font Arial-Bold -pointsize 24 \
+        -fill 'rgba(255,255,255,0.8)' \
+        -stroke 'rgba(0,0,0,0.5)' -strokewidth 1 \
+        -gravity center -annotate 0 "ANB" \
+        /app/assets/watermark.png || \
+        echo "Warning: Could not create watermark with ImageMagick"; \
+    else \
+        echo "Using existing watermark.png"; \
+    fi
+
+# Create ANB bumpers (intro/outro) if they don't exist
+RUN if [ ! -f /app/assets/intro.mp4 ] || [ ! -f /app/assets/outro.mp4 ]; then \
+    if [ -f /app/assets/create_bumpers.sh ]; then \
+        cd /app/assets && sh create_bumpers.sh || \
+        echo "Warning: Could not create bumpers"; \
+    fi; \
+    else \
+        echo "Using existing bumpers"; \
+    fi
+
+# Change ownership to worker user  
+RUN chown -R worker:worker ./worker /app/assets
+# Ensure /tmp is writable by worker user (standard tmp directory permissions)
+RUN chmod 1777 /tmp
 
 # Switch to non-root user
 USER worker

@@ -14,6 +14,20 @@ func NewRepository(db *database.DB) *Repository {
 	return &Repository{db: db}
 }
 
+// GetVideoByID retrieves a video by its ID
+func (r *Repository) GetVideoByID(videoID int) (*Video, error) {
+	var video Video
+	query := `SELECT id, title, status, uploaded_at, processed_at, deleted_at, user_id FROM videos WHERE id = $1`
+	
+	row := r.db.QueryRow(query, videoID)
+	err := row.Scan(&video.ID, &video.Title, &video.Status, &video.UploadedAt, &video.ProcessedAt, &video.DeletedAt, &video.UserID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get video by ID %d: %w", videoID, err)
+	}
+	
+	return &video, nil
+}
+
 // UpdateVideoStatus updates the status of a video record
 func (r *Repository) UpdateVideoStatus(videoID int, status string) error {
 	var query string
@@ -50,27 +64,4 @@ func (r *Repository) UpdateVideoStatus(videoID int, status string) error {
 	}
 	
 	return nil
-}
-
-// GetVideoByS3Key retrieves a video by its S3 key
-func (r *Repository) GetVideoByS3Key(s3Key string) (*Video, error) {
-	query := `
-		SELECT id, title, status, uploaded_at, processed_at, deleted_at, user_id
-		FROM videos
-		WHERE id = (
-			SELECT CAST(SUBSTRING($1 FROM '^([0-9]+)\.') AS INTEGER)
-		)`
-	
-	var video Video
-	err := r.db.QueryRow(query, s3Key).Scan(
-		&video.ID, &video.Title, &video.Status,
-		&video.UploadedAt, &video.ProcessedAt,
-		&video.DeletedAt, &video.UserID,
-	)
-	
-	if err != nil {
-		return nil, fmt.Errorf("failed to get video by S3 key: %w", err)
-	}
-	
-	return &video, nil
 }

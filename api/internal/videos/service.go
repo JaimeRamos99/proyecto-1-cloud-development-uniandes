@@ -39,7 +39,7 @@ type VideoMetadata struct {
 }
 
 // UploadVideo handles the business logic for video upload and validation
-func (s *Service) UploadVideo(file *multipart.FileHeader, title string, userID int) (*dto.VideoUploadResponse, error) {
+func (s *Service) UploadVideo(file *multipart.FileHeader, title string, isPublic bool, userID int) (*dto.VideoUploadResponse, error) {
 	// Get validation rules
 	rules := DefaultValidationRules()
 	
@@ -51,9 +51,10 @@ func (s *Service) UploadVideo(file *multipart.FileHeader, title string, userID i
 
 	// Create video record in database with metadata
 	video := &Video{
-		Title:  title,
-		Status: StatusUploaded, // Set initial status
-		UserID: userID,
+		Title:    title,
+		Status:   StatusUploaded, // Set initial status
+		IsPublic: isPublic,       // Set visibility
+		UserID:   userID,
 	}
 
 	createdVideo, err := s.repo.CreateVideo(video)
@@ -62,7 +63,7 @@ func (s *Service) UploadVideo(file *multipart.FileHeader, title string, userID i
 	}
 
 	// Upload file to S3 using ObjectStorage
-	s3Key, err := s.uploadVideoToStorage(file, createdVideo.ID, userID)
+	s3Key, err := s.uploadVideoToStorage(file, createdVideo.ID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to upload video to storage: %w", err)
 	} 
@@ -72,7 +73,7 @@ func (s *Service) UploadVideo(file *multipart.FileHeader, title string, userID i
 	if err != nil {
 		// Log the error but don't fail the upload - the video is already saved
 		// In production, you might want to implement retry logic or dead letter queue
-		fmt.Printf("Warning: Failed to send message queue message for video %d: %v\n", createdVideo.ID, err)
+		fmt.Printf("Warning: Failed to send message for video %d (S3 key: %s): %v\n", createdVideo.ID, s3Key, err)
 	}
 
 	// Return success response with S3 information
@@ -80,6 +81,7 @@ func (s *Service) UploadVideo(file *multipart.FileHeader, title string, userID i
 		ID:         createdVideo.ID,
 		Title:      createdVideo.Title,
 		Status:     createdVideo.Status,
+		IsPublic:   createdVideo.IsPublic,
 		UploadedAt: createdVideo.UploadedAt,
 		UserID:     createdVideo.UserID,
 		S3Key:      s3Key, // Include S3 key in response
@@ -89,7 +91,7 @@ func (s *Service) UploadVideo(file *multipart.FileHeader, title string, userID i
 }
 
 // uploadVideoToStorage uploads a video file to S3 and returns the S3 key
-func (s *Service) uploadVideoToStorage(file *multipart.FileHeader, videoID, userID int) (string, error) {
+func (s *Service) uploadVideoToStorage(file *multipart.FileHeader, videoID int) (string, error) {
 	// Open the uploaded file
 	src, err := file.Open()
 	if err != nil {
@@ -119,6 +121,97 @@ func (s *Service) uploadVideoToStorage(file *multipart.FileHeader, videoID, user
 func (s *Service) generateS3Key(videoID int) string {
 	// Use "original/" prefix to keep the original file
 	return fmt.Sprintf("original/%d.mp4", videoID)
+}
+
+// GetVideo retrieves video details and generates presigned URLs (with user validation)
+func (s *Service) GetVideo(videoID int, userID int) (*Video, string, string, error) {
+	// Get video from database with user ownership validation
+	video, err := s.repo.GetVideoByID(videoID, userID)
+	if err != nil {
+		return nil, "", "", fmt.Errorf("failed to get video: %w", err)
+	}
+
+	// Generate presigned URLs for original and processed videos
+	originalS3Key := fmt.Sprintf("original/%d.mp4", videoID)
+	processedS3Key := fmt.Sprintf("processed/%d.mp4", videoID)
+
+	// Get presigned URL for original video
+	originalURL, err := s.storageManager.GetSignedUrl(originalS3Key)
+	if err != nil {
+		return nil, "", "", fmt.Errorf("failed to generate original video URL: %w", err)
+	}
+
+	// Get presigned URL for processed video
+	processedURL, err := s.storageManager.GetSignedUrl(processedS3Key)
+	if err != nil {
+		return nil, "", "", fmt.Errorf("failed to generate processed video URL: %w", err)
+	}
+
+	return video, originalURL, processedURL, nil
+}
+
+// GetUserVideos retrieves all videos for a user with presigned URLs
+func (s *Service) GetUserVideos(userID int) ([]*dto.VideoResponse, error) {
+	// Get all videos for the user from database
+	videos, err := s.repo.GetVideosByUserID(userID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get user videos: %w", err)
+	}
+
+	// Convert to response format with presigned URLs
+	var responses []*dto.VideoResponse
+	for _, video := range videos {
+		// Generate presigned URLs for original and processed videos
+		originalS3Key := fmt.Sprintf("original/%d.mp4", video.ID)
+		processedS3Key := fmt.Sprintf("processed/%d.mp4", video.ID)
+
+		// Get presigned URL for original video
+		originalURL, err := s.storageManager.GetSignedUrl(originalS3Key)
+		if err != nil {
+			// Log error but continue with empty URL
+			fmt.Printf("Warning: Failed to generate original video URL for video %d: %v\n", video.ID, err)
+			originalURL = ""
+		}
+
+		// Get presigned URL for processed video
+		processedURL, err := s.storageManager.GetSignedUrl(processedS3Key)
+		if err != nil {
+			// Log error but continue with empty URL
+			fmt.Printf("Warning: Failed to generate processed video URL for video %d: %v\n", video.ID, err)
+			processedURL = ""
+		}
+
+		// Create response with all required fields
+		response := &dto.VideoResponse{
+			VideoID:      video.ID,
+			Title:        video.Title,
+			Status:       video.Status,
+			IsPublic:     video.IsPublic,
+			UploadedAt:   video.UploadedAt,
+			ProcessedAt:  video.ProcessedAt,
+			OriginalURL:  originalURL,
+			ProcessedURL: processedURL,
+			Votes:        0, // Default votes value
+		}
+
+		responses = append(responses, response)
+	}
+
+	return responses, nil
+}
+
+// DeleteVideo performs soft delete on a video (only updates deleted_at, doesn't touch S3)
+func (s *Service) DeleteVideo(videoID int, userID int) error {
+	// Perform soft delete in the database
+	err := s.repo.SoftDeleteVideo(videoID, userID)
+	if err != nil {
+		return fmt.Errorf("failed to delete video: %w", err)
+	}
+
+	// Note: We intentionally do NOT delete files from S3 as per requirements
+	// The video files remain in storage but the database record is marked as deleted
+	
+	return nil
 }
 
 // GetVideoDownloadURL generates a presigned URL for video download

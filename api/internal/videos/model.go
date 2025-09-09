@@ -9,6 +9,7 @@ type Video struct {
 	ID          int        `json:"id" db:"id"`
 	Title       string     `json:"title" db:"title"`
 	Status      string     `json:"status" db:"status"`
+	IsPublic    bool       `json:"is_public" db:"is_public"`
 	UploadedAt  time.Time  `json:"uploaded_at" db:"uploaded_at"`
 	ProcessedAt *time.Time `json:"processed_at,omitempty" db:"processed_at"`
 	DeletedAt   *time.Time `json:"deleted_at,omitempty" db:"deleted_at"`

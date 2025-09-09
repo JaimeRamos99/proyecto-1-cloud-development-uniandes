@@ -128,10 +128,10 @@ health:
 	@curl -s http://localhost:4566/_localstack/health >/dev/null 2>&1 && echo " ✅ LocalStack OK" || echo " ❌ LocalStack FAIL"
 	@echo ""
 	@echo "🔍 LocalStack S3 service:"
-	@curl -s http://localhost:4566/_localstack/health | grep -q '"s3": "available"' && echo " ✅ S3 Service OK" || echo " ❌ S3 Service FAIL"
+	@curl -s http://localhost:4566/_localstack/health | grep -q '"s3": "running"' && echo " ✅ S3 Service OK" || echo " ❌ S3 Service FAIL"
 	@echo ""
 	@echo "🔍 LocalStack SQS service:"
-	@curl -s http://localhost:4566/_localstack/health | grep -q '"sqs": "available"' && echo " ✅ SQS Service OK" || echo " ❌ SQS Service FAIL"
+	@curl -s http://localhost:4566/_localstack/health | grep -q '"sqs": "running"' && echo " ✅ SQS Service OK" || echo " ❌ SQS Service FAIL"
 	@echo ""
 	@echo "🔍 API container status:"
 	@docker ps --filter name=proyecto1-api-local --format "table {{.Names}}\t{{.Status}}" | tail -n +2 | while read line; do echo " $$line"; done
