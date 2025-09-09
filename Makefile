@@ -299,3 +299,103 @@ clean:
 	@echo ""
 	@echo "💥 NUCLEAR CLEANUP COMPLETE - Everything obliterated!"
 	@echo "🚀 Run 'make local' to start fresh"
+
+# ==============================================================================
+# 🧪 TESTING COMMANDS
+# ==============================================================================
+
+# Run all tests
+test: api-test worker-test
+	@echo "✅ All tests completed!"
+
+# Run API tests
+api-test:
+	@echo "🧪 Running API tests..."
+	cd api && go test -v ./... -race -timeout=30s
+	@echo "✅ API tests completed!"
+
+# Run Worker tests  
+worker-test:
+	@echo "🧪 Running Worker tests..."
+	cd worker && go test -v ./... -race -timeout=30s
+	@echo "✅ Worker tests completed!"
+
+# Run tests with coverage
+test-coverage: api-test-coverage worker-test-coverage
+	@echo "✅ Coverage reports generated!"
+
+# Run API tests with coverage
+api-test-coverage:
+	@echo "🧪 Running API tests with coverage..."
+	cd api && go test -v ./... -race -timeout=30s -coverprofile=coverage.out -covermode=atomic
+	cd api && go tool cover -html=coverage.out -o coverage.html
+	@echo "📊 API coverage report: api/coverage.html"
+
+# Run Worker tests with coverage
+worker-test-coverage:
+	@echo "🧪 Running Worker tests with coverage..."
+	cd worker && go test -v ./... -race -timeout=30s -coverprofile=coverage.out -covermode=atomic
+	cd worker && go tool cover -html=coverage.out -o coverage.html
+	@echo "📊 Worker coverage report: worker/coverage.html"
+
+# Run tests in watch mode (requires entr or similar tool)
+test-watch:
+	@echo "👀 Running tests in watch mode..."
+	@echo "Watching for changes in API and Worker..."
+	find api worker -name "*.go" | entr -c make test
+
+# Run specific test
+test-specific:
+	@echo "🎯 Running specific test..."
+	@echo "Usage: make test-specific TEST=TestName DIR=api"
+	@if [ -z "$(TEST)" ] || [ -z "$(DIR)" ]; then \
+		echo "❌ Please specify TEST and DIR parameters"; \
+		echo "Example: make test-specific TEST=TestVideoService DIR=api"; \
+		exit 1; \
+	fi
+	cd $(DIR) && go test -v -run $(TEST) ./... -timeout=30s
+
+# Run benchmarks
+bench: api-bench worker-bench
+	@echo "⚡ All benchmarks completed!"
+
+# Run API benchmarks
+api-bench:
+	@echo "⚡ Running API benchmarks..."
+	cd api && go test -bench=. -benchmem ./...
+
+# Run Worker benchmarks
+worker-bench:
+	@echo "⚡ Running Worker benchmarks..."
+	cd worker && go test -bench=. -benchmem ./...
+
+# Lint and format code
+lint:
+	@echo "🔍 Running linters..."
+	cd api && go vet ./...
+	cd api && go fmt ./...
+	cd worker && go vet ./...
+	cd worker && go fmt ./...
+	@echo "✅ Linting completed!"
+
+# Clean test artifacts
+test-clean:
+	@echo "🧹 Cleaning test artifacts..."
+	find . -name "coverage.out" -delete
+	find . -name "coverage.html" -delete
+	find . -name "*.test" -delete
+	@echo "✅ Test artifacts cleaned!"
+
+# Run tests in CI mode (no race detector, faster)
+test-ci:
+	@echo "🤖 Running tests in CI mode..."
+	cd api && go test ./... -timeout=30s
+	cd worker && go test ./... -timeout=30s
+	@echo "✅ CI tests completed!"
+
+# Run tests with verbose output and show panics
+test-debug:
+	@echo "🐛 Running tests in debug mode..."
+	cd api && go test -v ./... -race -timeout=60s -count=1
+	cd worker && go test -v ./... -race -timeout=60s -count=1
+	@echo "✅ Debug tests completed!"
