@@ -250,3 +250,21 @@ func (h *VideoHandler) DeleteVideo(c *gin.Context) {
 	// Return success response with no content
 	c.JSON(http.StatusNoContent, nil)
 }
+
+// GetPublicVideos retrieves all public videos without authentication
+func (h *VideoHandler) GetPublicVideos(c *gin.Context) {
+	// Get all public videos from service
+	videos, err := h.videoService.GetPublicVideos()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, dto.ErrorResponse{
+			Error: "Failed to retrieve public videos",
+		})
+		return
+	}
+
+	// Log for debugging (can be removed in production)
+	log.Printf("Retrieved %d public videos", len(videos))
+
+	// Return the list of public videos
+	c.JSON(http.StatusOK, videos)
+}

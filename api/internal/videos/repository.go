@@ -134,3 +134,38 @@ func (r *Repository) SoftDeleteVideo(videoID int, userID int) error {
 
 	return nil
 }
+
+// GetPublicVideos retrieves all public videos that are not deleted
+func (r *Repository) GetPublicVideos() ([]*Video, error) {
+	query := `
+		SELECT id, title, status, is_public, uploaded_at, processed_at, deleted_at, user_id
+		FROM videos 
+		WHERE is_public = true AND deleted_at IS NULL
+		ORDER BY uploaded_at DESC`
+
+	rows, err := r.db.Query(query)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get public videos: %w", err)
+	}
+	defer rows.Close()
+
+	var videos []*Video
+	for rows.Next() {
+		var video Video
+		err := rows.Scan(
+			&video.ID, &video.Title, &video.Status, &video.IsPublic,
+			&video.UploadedAt, &video.ProcessedAt,
+			&video.DeletedAt, &video.UserID,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan public video row: %w", err)
+		}
+		videos = append(videos, &video)
+	}
+
+	if err = rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating public video rows: %w", err)
+	}
+
+	return videos, nil
+}

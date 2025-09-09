@@ -25,3 +25,15 @@ type VideoResponse struct {
 	ProcessedURL string     `json:"processed_url"`
 	Votes        int        `json:"votes"`
 }
+
+// PublicVideoResponse represents the response for public video details (without original URL)
+type PublicVideoResponse struct {
+	VideoID      int        `json:"video_id"`
+	Title        string     `json:"title"`
+	Status       string     `json:"status"`
+	IsPublic     bool       `json:"is_public"`
+	UploadedAt   time.Time  `json:"uploaded_at"`
+	ProcessedAt  *time.Time `json:"processed_at,omitempty"`
+	ProcessedURL string     `json:"processed_url"`
+	Votes        int        `json:"votes"`
+}

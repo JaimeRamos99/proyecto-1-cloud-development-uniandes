@@ -52,6 +52,11 @@ func NewRouter(cfg *config.Config, db *database.DB) *gin.Engine {
 			videos.GET("/:video_id", authMiddleware, videoHandler.GetVideo)
 			videos.DELETE("/:video_id", authMiddleware, videoHandler.DeleteVideo)
 		}
+
+		public := api.Group("/public")
+		{
+			public.GET("/videos", videoHandler.GetPublicVideos)
+		}
 	}
 	
 	return router

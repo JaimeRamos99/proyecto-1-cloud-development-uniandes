@@ -243,3 +243,43 @@ func (s *Service) sendVideoProcessingMessage(s3Key string) error {
 func (s *Service) CheckFFProbeInstallation() error {
 	return s.validator.CheckFFProbeInstallation()
 }
+
+// GetPublicVideos retrieves all public videos with presigned URLs (only processed videos)
+func (s *Service) GetPublicVideos() ([]*dto.PublicVideoResponse, error) {
+	// Get all public videos from database
+	videos, err := s.repo.GetPublicVideos()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get public videos: %w", err)
+	}
+
+	// Convert to public response format with presigned URLs (only processed videos)
+	var responses []*dto.PublicVideoResponse
+	for _, video := range videos {
+		// Generate presigned URL only for processed video
+		processedS3Key := fmt.Sprintf("processed/%d.mp4", video.ID)
+
+		// Get presigned URL for processed video
+		processedURL, err := s.storageManager.GetSignedUrl(processedS3Key)
+		if err != nil {
+			// Log error but continue with empty URL
+			fmt.Printf("Warning: Failed to generate processed video URL for video %d: %v\n", video.ID, err)
+			processedURL = ""
+		}
+
+		// Create public response with processed URL only (no original URL field)
+		response := &dto.PublicVideoResponse{
+			VideoID:      video.ID,
+			Title:        video.Title,
+			Status:       video.Status,
+			IsPublic:     video.IsPublic,
+			UploadedAt:   video.UploadedAt,
+			ProcessedAt:  video.ProcessedAt,
+			ProcessedURL: processedURL,
+			Votes:        0, // Default votes value
+		}
+
+		responses = append(responses, response)
+	}
+
+	return responses, nil
+}
