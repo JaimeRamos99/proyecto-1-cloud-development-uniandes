@@ -1,0 +1,142 @@
+name: 🚀 Simple CI Pipeline
+
+on:
+  pull_request:
+    branches: [main, develop]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+env:
+  GO_VERSION: "1.23.12"
+
+jobs:
+  # ============================================================================
+  # 🔧 BUILD & TEST
+  # ============================================================================
+  build-and-test:
+    name: 🔧 Build & Test
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_DB: proyecto_1_test
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+    steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@v4
+
+      - name: 🐹 Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      # API Module
+      - name: 📦 Download dependencies - API
+        working-directory: ./api
+        run: |
+          go mod download
+          go mod verify
+
+      - name: 🎨 Format check - API
+        working-directory: ./api
+        run: |
+          if [ "$(gofmt -l . | wc -l)" -gt 0 ]; then
+            echo "❌ Code is not properly formatted"
+            gofmt -l .
+            exit 1
+          fi
+          echo "✅ Code is properly formatted"
+
+      - name: 🔍 Vet check - API
+        working-directory: ./api
+        run: go vet ./...
+
+      - name: 🧪 Run tests - API
+        working-directory: ./api
+        env:
+          DATABASE_URL: postgres://postgres:postgres@localhost:5432/proyecto_1_test?sslmode=disable
+        run: go test -v ./...
+
+      - name: 🔨 Build - API
+        working-directory: ./api
+        run: go build -o bin/api ./cmd/api
+
+      # Worker Module
+      - name: 📦 Download dependencies - Worker
+        working-directory: ./worker
+        run: |
+          go mod download
+          go mod verify
+
+      - name: 🎨 Format check - Worker
+        working-directory: ./worker
+        run: |
+          if [ "$(gofmt -l . | wc -l)" -gt 0 ]; then
+            echo "❌ Code is not properly formatted"
+            gofmt -l .
+            exit 1
+          fi
+          echo "✅ Code is properly formatted"
+
+      - name: 🔍 Vet check - Worker
+        working-directory: ./worker
+        run: go vet ./...
+
+      - name: 🧪 Run tests - Worker
+        working-directory: ./worker
+        env:
+          DATABASE_URL: postgres://postgres:postgres@localhost:5432/proyecto_1_test?sslmode=disable
+        run: go test -v ./...
+
+      - name: 🔨 Build - Worker
+        working-directory: ./worker
+        run: go build -o bin/worker ./cmd/worker
+
+      - name: 📤 Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: binaries
+          path: |
+            api/bin/api
+            worker/bin/worker
+          retention-days: 7
+
+  # ============================================================================
+  # 🐳 DOCKER BUILD (only on main branch)
+  # ============================================================================
+  docker-build:
+    name: 🐳 Docker Build
+    runs-on: ubuntu-latest
+    needs: build-and-test
+    if: github.ref == 'refs/heads/main'
+
+    steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@v4
+
+      - name: 🐳 Build API Docker image
+        run: |
+          cd api
+          docker build -t proyecto1-api:latest .
+
+      - name: 🐳 Build Worker Docker image
+        run: |
+          cd worker
+          docker build -t proyecto1-worker:latest .
+
+      - name: ✅ Docker build completed
+        run: echo "✅ All Docker images built successfully"
