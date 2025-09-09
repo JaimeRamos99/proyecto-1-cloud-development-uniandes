@@ -68,5 +68,3 @@ func (h *RankingHandler) GetPlayerRankings(c *gin.Context) {
 
 	c.JSON(http.StatusOK, response)
 }
-
-

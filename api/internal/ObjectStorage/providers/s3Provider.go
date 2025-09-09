@@ -77,18 +77,18 @@ func (s *S3Provider) UploadFile(fileBuffer []byte, fileName string) error {
 // GetSignedUrl generates a presigned URL for file access
 func (s *S3Provider) GetSignedUrl(fileName string) (string, error) {
 	presignClient := s3.NewPresignClient(s.client)
-	
+
 	request, err := presignClient.PresignGetObject(context.TODO(), &s3.GetObjectInput{
 		Bucket: aws.String(s.bucketName),
 		Key:    aws.String(fileName),
 	}, func(opts *s3.PresignOptions) {
 		opts.Expires = 15 * time.Minute // Default 15 minutes
 	})
-	
+
 	if err != nil {
 		return "", fmt.Errorf("failed to create presigned URL: %w", err)
 	}
-	
+
 	return request.URL, nil
 }
 

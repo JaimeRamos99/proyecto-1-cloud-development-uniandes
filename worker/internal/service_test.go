@@ -114,7 +114,7 @@ func (suite *WorkerServiceTestSuite) SetupTest() {
 func TestIsPermanentError(t *testing.T) {
 	// Create a service instance to test the method
 	service := &WorkerService{}
-	
+
 	tests := []struct {
 		name     string
 		error    error
@@ -169,7 +169,7 @@ func TestIsPermanentError(t *testing.T) {
 func TestExtractVideoIDFromS3Key(t *testing.T) {
 	// Create a service instance to test the method
 	service := &WorkerService{}
-	
+
 	tests := []struct {
 		name     string
 		s3Key    string
@@ -229,7 +229,7 @@ func TestExtractVideoIDFromS3Key(t *testing.T) {
 func TestGenerateProcessedS3Key(t *testing.T) {
 	// Create a service instance to test the method
 	service := &WorkerService{}
-	
+
 	tests := []struct {
 		name        string
 		originalKey string

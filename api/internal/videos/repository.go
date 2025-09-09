@@ -24,10 +24,10 @@ func (r *Repository) CreateVideo(video *Video) (*Video, error) {
 	var createdVideo Video
 	err := r.db.QueryRow(query, video.Title, video.Status, video.IsPublic, video.UserID).Scan(
 		&createdVideo.ID, &createdVideo.Title, &createdVideo.Status, &createdVideo.IsPublic,
-		&createdVideo.UploadedAt, &createdVideo.ProcessedAt, 
+		&createdVideo.UploadedAt, &createdVideo.ProcessedAt,
 		&createdVideo.DeletedAt, &createdVideo.UserID,
 	)
-	
+
 	if err != nil {
 		return nil, fmt.Errorf("failed to create video: %w", err)
 	}
@@ -99,7 +99,7 @@ func (r *Repository) SoftDeleteVideo(videoID int, userID int) error {
 		SELECT is_public 
 		FROM videos 
 		WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL`
-	
+
 	var isPublic bool
 	err := r.db.QueryRow(checkQuery, videoID, userID).Scan(&isPublic)
 	if err != nil {

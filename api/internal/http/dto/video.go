@@ -40,15 +40,15 @@ type PublicVideoResponse struct {
 
 // PlayerRankingResponse represents a single player in the rankings
 type PlayerRankingResponse struct {
-	UserID            int     `json:"user_id"`
-	FirstName         string  `json:"first_name"`
-	LastName          string  `json:"last_name"`
-	Email             string  `json:"email"`
-	City              string  `json:"city"`
-	Country           string  `json:"country"`
-	TotalVotes        int     `json:"total_votes"`
-	Ranking           int     `json:"ranking"`
-	LastUpdated       time.Time `json:"last_updated"`
+	UserID      int       `json:"user_id"`
+	FirstName   string    `json:"first_name"`
+	LastName    string    `json:"last_name"`
+	Email       string    `json:"email"`
+	City        string    `json:"city"`
+	Country     string    `json:"country"`
+	TotalVotes  int       `json:"total_votes"`
+	Ranking     int       `json:"ranking"`
+	LastUpdated time.Time `json:"last_updated"`
 }
 
 // PlayerRankingsResponse represents the paginated response for rankings

@@ -1,0 +1,136 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main, develop]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+env:
+  GO_VERSION: "1.23.12"
+
+jobs:
+  # ============================================================================
+  # API VALIDATION
+  # ============================================================================
+  api-validation:
+    name: API Validation
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_DB: proyecto_1_test
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: 📦 Download dependencies
+        working-directory: ./api
+        run: |
+          go mod download
+          go mod verify
+
+      - name: 🎨 Format check
+        working-directory: ./api
+        run: |
+          if [ "$(gofmt -l . | wc -l)" -gt 0 ]; then
+            echo "❌ Code is not properly formatted"
+            gofmt -l .
+            exit 1
+          fi
+          echo "✅ Code is properly formatted"
+
+      - name: 🔍 Vet check
+        working-directory: ./api
+        run: go vet ./...
+
+      - name: 🧪 Run tests
+        working-directory: ./api
+        env:
+          DATABASE_URL: postgres://postgres:postgres@localhost:5432/proyecto_1_test?sslmode=disable
+        run: go test -v ./...
+
+      - name: 🔨 Build
+        working-directory: ./api
+        run: go build -o bin/api ./cmd/api
+
+  # ============================================================================
+  # WORKER VALIDATION
+  # ============================================================================
+  worker-validation:
+    name: Worker Validation
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_DB: proyecto_1_test
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: 📦 Download dependencies
+        working-directory: ./worker
+        run: |
+          go mod download
+          go mod verify
+
+      - name: 🎨 Format check
+        working-directory: ./worker
+        run: |
+          if [ "$(gofmt -l . | wc -l)" -gt 0 ]; then
+            echo "❌ Code is not properly formatted"
+            gofmt -l .
+            exit 1
+          fi
+          echo "✅ Code is properly formatted"
+
+      - name: 🔍 Vet check
+        working-directory: ./worker
+        run: go vet ./...
+
+      - name: 🧪 Run tests
+        working-directory: ./worker
+        env:
+          DATABASE_URL: postgres://postgres:postgres@localhost:5432/proyecto_1_test?sslmode=disable
+        run: go test -v ./...
+
+      - name: 🔨 Build
+        working-directory: ./worker
+        run: go build -o bin/worker ./cmd/worker

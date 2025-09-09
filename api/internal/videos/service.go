@@ -31,18 +31,18 @@ func NewService(repo *Repository, storageManager *ObjectStorage.FileStorageManag
 
 // VideoMetadata represents video file metadata
 type VideoMetadata struct {
-	Duration   float64 // in seconds
-	Width      int
-	Height     int
-	Size       int64 // file size in bytes
-	Format     string
+	Duration float64 // in seconds
+	Width    int
+	Height   int
+	Size     int64 // file size in bytes
+	Format   string
 }
 
 // UploadVideo handles the business logic for video upload and validation
 func (s *Service) UploadVideo(file *multipart.FileHeader, title string, isPublic bool, userID int) (*dto.VideoUploadResponse, error) {
 	// Get validation rules
 	rules := DefaultValidationRules()
-	
+
 	// Perform complete video validation using FFprobe
 	_, err := s.validator.ValidateVideo(file, rules)
 	if err != nil {
@@ -66,7 +66,7 @@ func (s *Service) UploadVideo(file *multipart.FileHeader, title string, isPublic
 	s3Key, err := s.uploadVideoToStorage(file, createdVideo.ID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to upload video to storage: %w", err)
-	} 
+	}
 
 	// Send video processing message to message queue
 	err = s.sendVideoProcessingMessage(s3Key)
@@ -212,7 +212,7 @@ func (s *Service) DeleteVideo(videoID int, userID int) error {
 
 	// Note: We intentionally do NOT delete files from S3 as per requirements
 	// The video files remain in storage but the database record is marked as deleted
-	
+
 	return nil
 }
 

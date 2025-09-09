@@ -30,7 +30,7 @@ func TestDefaultValidationRules(t *testing.T) {
 
 func TestGenerateS3Key(t *testing.T) {
 	service := &Service{}
-	
+
 	tests := []struct {
 		name     string
 		videoID  int
