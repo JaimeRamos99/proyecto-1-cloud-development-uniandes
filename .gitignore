@@ -1,0 +1,147 @@
+# Proyecto_1 - Video processing application
+# Custom .gitignore tailored for this specific project
+
+# ===== GO =====
+# Binaries for programs and plugins
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+/api/bin/
+/api/main
+/worker/bin/
+
+# Test binary, built with `go test -c`
+*.test
+
+# Output of the go coverage tool
+*.out
+
+# Go workspace file
+go.work
+
+# Dependency directories (uncomment if using)
+# /api/vendor/
+
+# ===== ENVIRONMENT & CONFIG =====
+# Environment files
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+*.env
+
+# Local configuration overrides
+config.local.yml
+docker-compose.override.yml
+
+# ===== BUILD & LOGS =====
+# Build artifacts
+build/
+dist/
+*.log
+*.log.*
+logs/
+
+# ===== DOCKER =====
+# Docker override files (if any)
+docker-compose.override.yml
+
+# ===== DATABASE =====
+# Local database files (if any)
+*.db
+*.sqlite
+*.sqlite3
+
+# ===== IDE & EDITORS =====
+# VSCode
+.vscode/
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+
+# JetBrains IDEs (GoLand, IntelliJ)
+.idea/
+*.iml
+*.iws
+*.ipr
+
+# Vim
+*.swp
+*.swo
+*~
+
+# Emacs
+*~
+\#*\#
+.\#*
+
+# ===== OPERATING SYSTEM =====
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# Windows
+Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+ehthumbs_vista.db
+*.stackdump
+[Dd]esktop.ini
+$RECYCLE.BIN/
+
+# Linux
+.fuse_hidden*
+.directory
+.Trash-*
+.nfs*
+
+# ===== TEMPORARY & CACHE =====
+# Temporary files
+*.tmp
+*.temp
+*.bak
+*.backup
+*.swp
+*.cache
+
+# ===== PROJECT SPECIFIC =====
+# Upload directories (if you add file uploads later)
+/uploads/
+/tmp/
+
+# Test coverage reports
+coverage.html
+coverage.out
+
+# Local scripts or notes
+scripts/local.*
+notes.md
+TODO.md
+scratch/
+
+# ===== SECRETS & KEYS =====
+# SSH keys
+*.pem
+*.key
+id_rsa*
+id_ed25519*
+
+# SSL certificates
+*.crt
+*.csr
+
+# API keys or tokens (if stored in files)
+*secret*
+*token*
+*key*.txt
+
+# ===== DOCUMENTATION BUILD =====
+# If you add documentation generators later
+docs/_build/
+site/
