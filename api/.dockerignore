@@ -1,0 +1,30 @@
+# Git
+.git
+.gitignore
+
+# Documentation
+README.md
+*.md
+
+# Environment files
+.env*
+env.example
+
+# Development files
+.vscode
+.idea
+
+# Logs
+*.log
+
+# Test files
+*_test.go
+test/
+
+# Examples and scripts
+examples/
+scripts/
+
+# Temporary files
+tmp/
+temp/

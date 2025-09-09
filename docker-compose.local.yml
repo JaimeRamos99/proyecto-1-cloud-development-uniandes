@@ -70,7 +70,7 @@ services:
 
   api:
     build:
-      context: ./backend
+      context: ./api
       dockerfile: Dockerfile
     container_name: proyecto1-api-local
     # Remove port exposure since nginx will handle external access
@@ -115,6 +115,46 @@ services:
         condition: service_healthy
       localstack:
         condition: service_healthy
+    networks:
+      - proyecto0-local-network
+    restart: unless-stopped
+
+  worker:
+    build:
+      context: ./worker
+      dockerfile: Dockerfile
+    container_name: proyecto1-worker-local
+    environment:
+      # Database configuration
+      - DB_DRIVER=postgres
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_NAME=proyecto_1
+      - DB_USER=postgres
+      - DB_PASSWORD=password
+      - DB_SSL_MODE=disable
+      - DB_MAX_OPEN_CONNS=25
+      - DB_MAX_IDLE_CONNS=5
+
+      # App configuration
+      - APP_NAME=Proyecto_1_Worker
+      - APP_VERSION=1.0.0
+      - APP_ENV=development
+
+      # AWS/LocalStack configuration
+      - AWS_ACCESS_KEY_ID=test
+      - AWS_SECRET_ACCESS_KEY=test
+      - AWS_DEFAULT_REGION=us-east-1
+      - AWS_ENDPOINT_URL=http://localstack:4566
+      - S3_BUCKET_NAME=proyecto1-videos
+      - SQS_QUEUE_NAME=proyecto1-video-processing
+    depends_on:
+      postgres:
+        condition: service_healthy
+      localstack:
+        condition: service_healthy
+      api:
+        condition: service_started
     networks:
       - proyecto0-local-network
     restart: unless-stopped

@@ -1,4 +1,4 @@
-# Proyecto_1 - Go Backend with Docker & nginx
+# Proyecto_1 - Video processing application
 # Custom .gitignore tailored for this specific project
 
 # ===== GO =====
@@ -8,8 +8,9 @@
 *.dll
 *.so
 *.dylib
-/backend/bin/
-/backend/main
+/api/bin/
+/api/main
+/worker/bin/
 
 # Test binary, built with `go test -c`
 *.test
@@ -21,7 +22,7 @@
 go.work
 
 # Dependency directories (uncomment if using)
-# /backend/vendor/
+# /api/vendor/
 
 # ===== ENVIRONMENT & CONFIG =====
 # Environment files
