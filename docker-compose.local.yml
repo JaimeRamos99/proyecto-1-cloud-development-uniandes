@@ -14,6 +14,7 @@ services:
       - ./db/001_create_user_table.sql:/docker-entrypoint-initdb.d/001_create_user_table.sql
       - ./db/002_create_video_table.sql:/docker-entrypoint-initdb.d/002_create_video_table.sql
       - ./db/003_add_is_public_to_videos.sql:/docker-entrypoint-initdb.d/003_add_is_public_to_videos.sql
+      - ./db/004_create_votes_table.sql:/docker-entrypoint-initdb.d/004_create_votes_table.sql
       # Persist data in local volume
       - postgres_local_data:/var/lib/postgresql/data
     networks:

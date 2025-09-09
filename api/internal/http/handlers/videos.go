@@ -14,6 +14,7 @@ import (
 	"proyecto1/root/internal/messaging"
 	messagingProviders "proyecto1/root/internal/messaging/providers"
 	"proyecto1/root/internal/videos"
+	"proyecto1/root/internal/votes"
 
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
@@ -21,6 +22,7 @@ import (
 
 type VideoHandler struct {
 	videoService *videos.Service
+	voteService  *votes.Service
 }
 
 func NewVideoHandler(db *database.DB, cfg *config.Config) *VideoHandler {
@@ -34,8 +36,13 @@ func NewVideoHandler(db *database.DB, cfg *config.Config) *VideoHandler {
 	repo := videos.NewRepository(db)
 	service := videos.NewService(repo, storageManager, messageQueue)
 	
+	// Create vote service
+	voteRepo := votes.NewRepository(db)
+	voteService := votes.NewService(voteRepo)
+	
 	return &VideoHandler{
 		videoService: service,
+		voteService:  voteService,
 	}
 }
 
@@ -158,6 +165,14 @@ func (h *VideoHandler) GetVideo(c *gin.Context) {
 		return
 	}
 
+	// Get vote count for the video
+	voteCount, err := h.voteService.GetVideoVoteCount(videoID)
+	if err != nil {
+		// Log error but don't fail the response
+		log.Printf("Failed to get vote count for video %d: %v", videoID, err)
+		voteCount = 0
+	}
+
 	// Create response with all required fields
 	response := &dto.VideoResponse{
 		VideoID:      video.ID,
@@ -168,7 +183,7 @@ func (h *VideoHandler) GetVideo(c *gin.Context) {
 		ProcessedAt:  video.ProcessedAt,
 		OriginalURL:  originalURL,
 		ProcessedURL: processedURL,
-		Votes:        0,
+		Votes:        voteCount,
 	}
 
 	// Log for debugging (can be removed in production)
@@ -190,6 +205,18 @@ func (h *VideoHandler) GetUserVideos(c *gin.Context) {
 			Error: "Failed to retrieve user videos",
 		})
 		return
+	}
+
+	// Update vote counts for all videos
+	for _, video := range videos {
+		voteCount, err := h.voteService.GetVideoVoteCount(video.VideoID)
+		if err != nil {
+			// Log error but don't fail the response
+			log.Printf("Failed to get vote count for video %d: %v", video.VideoID, err)
+			video.Votes = 0
+		} else {
+			video.Votes = voteCount
+		}
 	}
 
 	// Log for debugging (can be removed in production)
@@ -260,6 +287,18 @@ func (h *VideoHandler) GetPublicVideos(c *gin.Context) {
 			Error: "Failed to retrieve public videos",
 		})
 		return
+	}
+
+	// Update vote counts for all videos
+	for _, video := range videos {
+		voteCount, err := h.voteService.GetVideoVoteCount(video.VideoID)
+		if err != nil {
+			// Log error but don't fail the response
+			log.Printf("Failed to get vote count for video %d: %v", video.VideoID, err)
+			video.Votes = 0
+		} else {
+			video.Votes = voteCount
+		}
 	}
 
 	// Log for debugging (can be removed in production)

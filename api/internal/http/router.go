@@ -24,6 +24,7 @@ func NewRouter(cfg *config.Config, db *database.DB) *gin.Engine {
 	// Initialize handlers (passing shared session store to auth handler)
 	authHandler := handlers.NewAuthHandler(db, cfg, sessionStore)
 	videoHandler := handlers.NewVideoHandler(db, cfg)
+	voteHandler := handlers.NewVoteHandler(db)
 	healthHandler := handlers.NewHealthHandler(db, videoHandler)
 
 	// Initialize auth middleware with shared session store
@@ -56,6 +57,10 @@ func NewRouter(cfg *config.Config, db *database.DB) *gin.Engine {
 		public := api.Group("/public")
 		{
 			public.GET("/videos", videoHandler.GetPublicVideos)
+			
+			// Vote endpoints require authentication
+			public.POST("/videos/:video_id/vote", authMiddleware, voteHandler.VoteForVideo)
+			public.DELETE("/videos/:video_id/vote", authMiddleware, voteHandler.UnvoteForVideo)
 		}
 	}
 	

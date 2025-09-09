@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 	"log"
+	"strings"
 	"time"
 
 	"proyecto1/root/internal/config"
@@ -78,4 +79,15 @@ func (db *DB) HealthCheck() error {
 	}
 	
 	return nil
+}
+
+// IsUniqueViolation checks if the error is a PostgreSQL unique constraint violation
+func IsUniqueViolation(err error) bool {
+	if err == nil {
+		return false
+	}
+	// PostgreSQL unique constraint violation error code is 23505
+	return strings.Contains(err.Error(), "duplicate key value violates unique constraint") ||
+		   strings.Contains(err.Error(), "unique constraint") ||
+		   strings.Contains(err.Error(), "23505")
 }
