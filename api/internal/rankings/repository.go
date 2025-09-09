@@ -132,32 +132,3 @@ func (r *Repository) RefreshRankings() error {
 	return nil
 }
 
-// GetPlayerRanking retrieves a specific player's ranking by user ID
-func (r *Repository) GetPlayerRanking(userID int) (*PlayerRanking, error) {
-	query := `
-		SELECT 
-			user_id, first_name, last_name, email, city, country,
-			total_votes, ranking, last_updated
-		FROM player_rankings 
-		WHERE user_id = $1
-	`
-
-	var ranking PlayerRanking
-	err := r.db.QueryRow(query, userID).Scan(
-		&ranking.UserID,
-		&ranking.FirstName,
-		&ranking.LastName,
-		&ranking.Email,
-		&ranking.City,
-		&ranking.Country,
-		&ranking.TotalVotes,
-		&ranking.Ranking,
-		&ranking.LastUpdated,
-	)
-
-	if err != nil {
-		return nil, fmt.Errorf("failed to get player ranking: %w", err)
-	}
-
-	return &ranking, nil
-}

@@ -59,22 +59,3 @@ func (s *Service) RefreshRankings() error {
 	return s.repo.RefreshRankings()
 }
 
-// GetPlayerRanking retrieves a specific player's ranking
-func (s *Service) GetPlayerRanking(userID int) (*dto.PlayerRankingResponse, error) {
-	ranking, err := s.repo.GetPlayerRanking(userID)
-	if err != nil {
-		return nil, err
-	}
-
-	return &dto.PlayerRankingResponse{
-		UserID:            ranking.UserID,
-		FirstName:         ranking.FirstName,
-		LastName:          ranking.LastName,
-		Email:             ranking.Email,
-		City:              ranking.City,
-		Country:           ranking.Country,
-		TotalVotes:        ranking.TotalVotes,
-		Ranking:           ranking.Ranking,
-		LastUpdated:       ranking.LastUpdated,
-	}, nil
-}

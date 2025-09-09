@@ -65,8 +65,6 @@ func NewRouter(cfg *config.Config, db *database.DB) *gin.Engine {
 			
 			// Rankings endpoints (no authentication required)
 			public.GET("/rankings", rankingHandler.GetPlayerRankings)
-			public.GET("/rankings/:user_id", rankingHandler.GetPlayerRanking)
-			public.POST("/rankings/refresh", rankingHandler.RefreshPlayerRankings) // Manual refresh endpoint
 		}
 	}
 	

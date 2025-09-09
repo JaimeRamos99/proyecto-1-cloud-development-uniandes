@@ -1,6 +1,6 @@
 # Proyecto_1 Makefile
 
-.PHONY: help local clean build logs health test-api nginx-logs api-logs db-logs localstack-logs worker-logs rebuild-api rebuild-worker stop localstack-health localstack-test storage-test
+.PHONY: help local clean build logs health test-api test-startup nginx-logs api-logs db-logs localstack-logs worker-logs rebuild-api rebuild-worker stop localstack-health localstack-test storage-test docs docs-stop
 
 # Default target
 help:
@@ -21,17 +21,20 @@ help:
 	@echo "  storage-test    - Test file storage functionality with ObjectStorage"
 	@echo "  test-startup    - Test service startup order and dependencies"
 	@echo "  test-api        - Test API endpoints with sample requests"
+	@echo "  docs            - Serve API documentation with Swagger UI"
+	@echo "  docs-stop       - Stop API documentation server"
 	@echo "  stop            - Stop all containers (keeps volumes)"
 	@echo "  clean           - NUCLEAR: Stop and remove EVERYTHING (containers, volumes, networks, images)"
 
 # Local: Full local environment with nginx proxy and LocalStack
 local:
-	@echo "🚀 Starting full local environment with nginx proxy, LocalStack, and Worker..."
+	@echo "🚀 Starting full local environment with nginx proxy, LocalStack, Worker, and Documentation..."
 	docker-compose -f docker-compose.local.yml up -d
 	@echo ""
 	@echo "✅ Services are starting up..."
 	@echo "🌐 nginx proxy:      http://localhost:80"
 	@echo "🔗 API endpoints:    http://localhost:80/api"
+	@echo "📚 API docs:         http://localhost:8080"
 	@echo "🤖 Worker service:   Running in background (processing video queue)"
 	@echo "🗄️  PostgreSQL:      localhost:5432"
 	@echo "☁️  LocalStack:       http://localhost:4566"
@@ -230,6 +233,29 @@ test-api:
 	@echo ""
 	@echo "For full API testing, use the examples in nginx/README.md"
 
+# Serve API documentation with Swagger UI
+docs:
+	@echo "📚 Starting API documentation server..."
+	@if docker-compose -f docker-compose.local.yml ps docs | grep -q "Up"; then \
+		echo "📖 Documentation is already running at http://localhost:8080"; \
+	else \
+		echo "🚀 Starting Swagger UI container..."; \
+		docker-compose -f docker-compose.local.yml up -d docs; \
+		echo ""; \
+		echo "✅ API Documentation is now available!"; \
+		echo "🌐 Open in browser: http://localhost:8080"; \
+		echo "📖 Interactive Swagger UI with all endpoints"; \
+		echo "🧪 Test endpoints directly from the browser"; \
+		echo ""; \
+		echo "💡 To stop: make docs-stop"; \
+	fi
+
+# Stop API documentation server
+docs-stop:
+	@echo "🛑 Stopping API documentation server..."
+	@docker-compose -f docker-compose.local.yml stop docs
+	@echo "✅ Documentation server stopped"
+
 # Stop all containers but keep volumes
 stop:
 	@echo "🛑 Stopping all containers..."
@@ -268,6 +294,8 @@ clean:
 	docker volume ls --filter "name=localstack" -q | xargs -r docker volume rm
 	@echo "Removing any leftover proyecto networks..."
 	docker network ls --filter "name=proyecto" -q | xargs -r docker network rm
+	@echo "Removing documentation server container..."
+	docker ps -aq --filter "name=video-platform-docs" | xargs -r docker rm -f
 	@echo ""
 	@echo "💥 NUCLEAR CLEANUP COMPLETE - Everything obliterated!"
 	@echo "🚀 Run 'make local' to start fresh"

@@ -183,6 +183,24 @@ services:
       - proyecto0-local-network
     restart: unless-stopped
 
+  docs:
+    image: swaggerapi/swagger-ui
+    container_name: proyecto1-docs-local
+    ports:
+      - "8080:8080"
+    environment:
+      - SWAGGER_JSON=/tmp/swagger.yaml
+    volumes:
+      - ./docs:/tmp:ro
+    networks:
+      - proyecto0-local-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
 volumes:
   postgres_local_data:
     driver: local

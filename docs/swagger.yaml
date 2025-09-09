@@ -1,0 +1,847 @@
+openapi: 3.0.3
+info:
+  title: Video Platform API
+  description: |
+    A comprehensive video platform API that supports:
+    - User authentication and authorization
+    - Video upload, processing, and management
+    - Video voting and ranking system
+    - Real-time ranking updates
+    - Public and private video access
+  version: 1.0.0
+  contact:
+    name: Video Platform Team
+    url: https://github.com/JaimeRamos99/proyecto-1-cloud-development-uniandes
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+
+servers:
+  - url: http://localhost:80/api
+    description: Local development server
+  - url: https://api.videplatform.com/api
+    description: Production server
+
+security:
+  - bearerAuth: []
+
+paths:
+  /health:
+    get:
+      summary: Health check endpoint
+      description: Returns the health status of the API and its dependencies
+      tags:
+        - Health
+      security: []
+      responses:
+        "200":
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: healthy
+                  services:
+                    type: object
+                    properties:
+                      database:
+                        type: string
+                        example: healthy
+                      ffprobe:
+                        type: string
+                        example: healthy
+
+  /auth/signup:
+    post:
+      summary: Register a new user
+      description: Creates a new user account with email verification
+      tags:
+        - Authentication
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SignupRequest"
+      responses:
+        "201":
+          description: User created successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SignupResponse"
+        "400":
+          description: Invalid input or validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Email already exists
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /auth/login:
+    post:
+      summary: Authenticate user
+      description: Logs in a user and returns a JWT token
+      tags:
+        - Authentication
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginRequest"
+      responses:
+        "200":
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LoginResponse"
+        "400":
+          description: Invalid credentials
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Authentication failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /auth/logout:
+    post:
+      summary: Logout user
+      description: Invalidates the user's JWT token
+      tags:
+        - Authentication
+      responses:
+        "200":
+          description: Logout successful
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Successfully logged out
+        "401":
+          description: Invalid or expired token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /videos/upload:
+    post:
+      summary: Upload a new video
+      description: |
+        Uploads a video file with metadata. The video will be processed asynchronously.
+        Supports various video formats and validates file integrity.
+      tags:
+        - Videos
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                video_file:
+                  type: string
+                  format: binary
+                  description: The video file to upload
+                title:
+                  type: string
+                  description: Title of the video
+                  example: My Amazing Video
+                is_public:
+                  type: boolean
+                  description: Whether the video should be publicly accessible
+                  example: true
+              required:
+                - video_file
+                - title
+                - is_public
+            encoding:
+              video_file:
+                contentType: video/mp4, video/avi, video/mov, video/mkv
+      responses:
+        "201":
+          description: Video uploaded successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VideoUploadResponse"
+        "400":
+          description: Invalid file or missing parameters
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /videos/:
+    get:
+      summary: Get user's videos
+      description: Retrieves all videos uploaded by the authenticated user
+      tags:
+        - Videos
+      responses:
+        "200":
+          description: List of user's videos
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/VideoResponse"
+        "401":
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /videos/{video_id}:
+    get:
+      summary: Get video details
+      description: Retrieves detailed information about a specific video owned by the user
+      tags:
+        - Videos
+      parameters:
+        - in: path
+          name: video_id
+          required: true
+          schema:
+            type: integer
+          description: ID of the video to retrieve
+      responses:
+        "200":
+          description: Video details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VideoResponse"
+        "404":
+          description: Video not found or not accessible
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+    delete:
+      summary: Delete a video
+      description: |
+        Soft deletes a video (only private videos can be deleted).
+        Public videos cannot be deleted to maintain ranking integrity.
+      tags:
+        - Videos
+      parameters:
+        - in: path
+          name: video_id
+          required: true
+          schema:
+            type: integer
+          description: ID of the video to delete
+      responses:
+        "204":
+          description: Video deleted successfully
+        "403":
+          description: Cannot delete public videos
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Video not found or not owned by user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /public/videos:
+    get:
+      summary: Get all public videos
+      description: Retrieves all publicly available videos with vote counts
+      tags:
+        - Public Videos
+      security: []
+      responses:
+        "200":
+          description: List of public videos
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/PublicVideoResponse"
+
+  /public/videos/{video_id}/vote:
+    post:
+      summary: Vote for a video
+      description: |
+        Casts a vote for a public video. Each user can only vote once per video.
+        Rankings are automatically updated in real-time after voting.
+      tags:
+        - Voting
+      parameters:
+        - in: path
+          name: video_id
+          required: true
+          schema:
+            type: integer
+          description: ID of the video to vote for
+      responses:
+        "201":
+          description: Vote cast successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VoteResponse"
+        "404":
+          description: Video not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: User has already voted for this video
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+    delete:
+      summary: Remove vote from a video
+      description: |
+        Removes the user's vote from a video. 
+        Rankings are automatically updated in real-time after unvoting.
+      tags:
+        - Voting
+      parameters:
+        - in: path
+          name: video_id
+          required: true
+          schema:
+            type: integer
+          description: ID of the video to remove vote from
+      responses:
+        "200":
+          description: Vote removed successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UnvoteResponse"
+        "404":
+          description: Video not found or user hasn't voted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /public/rankings:
+    get:
+      summary: Get player rankings
+      description: |
+        Retrieves paginated player rankings based on total votes received.
+        Supports filtering by country, city, vote counts, and video counts.
+        Rankings are updated in real-time after each vote.
+      tags:
+        - Rankings
+      security: []
+      parameters:
+        - in: query
+          name: page
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+          description: Page number for pagination
+        - in: query
+          name: page_size
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 10
+          description: Number of results per page
+        - in: query
+          name: country
+          schema:
+            type: string
+          description: Filter by player's country
+        - in: query
+          name: city
+          schema:
+            type: string
+          description: Filter by player's city
+        - in: query
+          name: min_votes
+          schema:
+            type: integer
+            minimum: 0
+          description: Minimum number of total votes
+        - in: query
+          name: max_votes
+          schema:
+            type: integer
+            minimum: 0
+          description: Maximum number of total votes
+        - in: query
+          name: min_videos
+          schema:
+            type: integer
+            minimum: 0
+          description: Minimum number of videos uploaded
+        - in: query
+          name: max_videos
+          schema:
+            type: integer
+            minimum: 0
+          description: Maximum number of videos uploaded
+      responses:
+        "200":
+          description: Paginated list of player rankings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PlayerRankingsResponse"
+        "400":
+          description: Invalid query parameters
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT token obtained from /auth/login endpoint
+
+  schemas:
+    SignupRequest:
+      type: object
+      required:
+        - first_name
+        - last_name
+        - email
+        - password1
+        - password2
+        - city
+        - country
+      properties:
+        first_name:
+          type: string
+          description: User's first name
+          example: John
+        last_name:
+          type: string
+          description: User's last name
+          example: Doe
+        email:
+          type: string
+          format: email
+          description: User's email address
+          example: john.doe@example.com
+        password1:
+          type: string
+          minLength: 6
+          description: Password (minimum 6 characters)
+          example: secretpassword123
+        password2:
+          type: string
+          description: Password confirmation (must match password1)
+          example: secretpassword123
+        city:
+          type: string
+          description: User's city
+          example: Bogotá
+        country:
+          type: string
+          description: User's country
+          example: Colombia
+
+    SignupResponse:
+      type: object
+      properties:
+        id:
+          type: integer
+          description: Unique user identifier
+          example: 123
+        first_name:
+          type: string
+          example: John
+        last_name:
+          type: string
+          example: Doe
+        email:
+          type: string
+          format: email
+          example: john.doe@example.com
+        city:
+          type: string
+          example: Bogotá
+        country:
+          type: string
+          example: Colombia
+
+    LoginRequest:
+      type: object
+      required:
+        - email
+        - password
+      properties:
+        email:
+          type: string
+          format: email
+          description: User's email address
+          example: john.doe@example.com
+        password:
+          type: string
+          description: User's password
+          example: secretpassword123
+
+    LoginResponse:
+      type: object
+      properties:
+        token:
+          type: string
+          description: JWT authentication token
+          example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+        user:
+          type: object
+          properties:
+            id:
+              type: integer
+              example: 123
+            first_name:
+              type: string
+              example: John
+            last_name:
+              type: string
+              example: Doe
+            email:
+              type: string
+              format: email
+              example: john.doe@example.com
+            city:
+              type: string
+              example: Bogotá
+            country:
+              type: string
+              example: Colombia
+
+    VideoUploadResponse:
+      type: object
+      properties:
+        id:
+          type: integer
+          description: Unique video identifier
+          example: 456
+        title:
+          type: string
+          description: Video title
+          example: My Amazing Video
+        status:
+          type: string
+          enum: [uploaded, processed]
+          description: Current processing status
+          example: uploaded
+        is_public:
+          type: boolean
+          description: Whether the video is publicly accessible
+          example: true
+        uploaded_at:
+          type: string
+          format: date-time
+          description: Upload timestamp
+          example: 2024-01-15T10:30:00Z
+        user_id:
+          type: integer
+          description: ID of the user who uploaded the video
+          example: 123
+        s3_key:
+          type: string
+          description: S3 storage key for the video file
+          example: videos/456/original.mp4
+
+    VideoResponse:
+      type: object
+      properties:
+        video_id:
+          type: integer
+          description: Unique video identifier
+          example: 456
+        title:
+          type: string
+          description: Video title
+          example: My Amazing Video
+        status:
+          type: string
+          enum: [uploaded, processed]
+          description: Current processing status
+          example: processed
+        is_public:
+          type: boolean
+          description: Whether the video is publicly accessible
+          example: true
+        uploaded_at:
+          type: string
+          format: date-time
+          description: Upload timestamp
+          example: 2024-01-15T10:30:00Z
+        processed_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: Processing completion timestamp
+          example: 2024-01-15T10:35:00Z
+        original_url:
+          type: string
+          format: uri
+          description: Presigned URL for original video (owner only)
+          example: https://s3.amazonaws.com/bucket/videos/456/original.mp4?signature=...
+        processed_url:
+          type: string
+          format: uri
+          description: Presigned URL for processed video
+          example: https://s3.amazonaws.com/bucket/videos/456/processed.mp4?signature=...
+        votes:
+          type: integer
+          description: Total number of votes received
+          example: 25
+
+    PublicVideoResponse:
+      type: object
+      properties:
+        video_id:
+          type: integer
+          description: Unique video identifier
+          example: 456
+        title:
+          type: string
+          description: Video title
+          example: My Amazing Video
+        status:
+          type: string
+          enum: [uploaded, processed]
+          description: Current processing status
+          example: processed
+        is_public:
+          type: boolean
+          description: Whether the video is publicly accessible
+          example: true
+        uploaded_at:
+          type: string
+          format: date-time
+          description: Upload timestamp
+          example: 2024-01-15T10:30:00Z
+        processed_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: Processing completion timestamp
+          example: 2024-01-15T10:35:00Z
+        processed_url:
+          type: string
+          format: uri
+          description: Presigned URL for processed video
+          example: https://s3.amazonaws.com/bucket/videos/456/processed.mp4?signature=...
+        votes:
+          type: integer
+          description: Total number of votes received
+          example: 25
+
+    VoteResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          description: Whether the vote was successful
+          example: true
+        message:
+          type: string
+          description: Success message
+          example: Your vote has been counted! Thanks for supporting great content and shaping the rankings.
+        video_id:
+          type: integer
+          description: ID of the voted video
+          example: 456
+        user_id:
+          type: integer
+          description: ID of the voting user
+          example: 123
+        voted_at:
+          type: string
+          format: date-time
+          description: Timestamp when vote was cast
+          example: 2024-01-15T11:00:00Z
+        vote_count:
+          type: integer
+          description: Updated total vote count for the video
+          example: 26
+
+    UnvoteResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          description: Whether the unvote was successful
+          example: true
+        message:
+          type: string
+          description: Success message
+          example: Your vote has been removed and the rankings have been updated.
+        video_id:
+          type: integer
+          description: ID of the video
+          example: 456
+        user_id:
+          type: integer
+          description: ID of the user
+          example: 123
+        vote_count:
+          type: integer
+          description: Updated total vote count for the video
+          example: 24
+
+    PlayerRankingResponse:
+      type: object
+      properties:
+        user_id:
+          type: integer
+          description: Unique user identifier
+          example: 123
+        first_name:
+          type: string
+          description: User's first name
+          example: John
+        last_name:
+          type: string
+          description: User's last name
+          example: Doe
+        email:
+          type: string
+          format: email
+          description: User's email address
+          example: john.doe@example.com
+        city:
+          type: string
+          description: User's city
+          example: Bogotá
+        country:
+          type: string
+          description: User's country
+          example: Colombia
+        total_votes:
+          type: integer
+          description: Total votes received across all user's videos
+          example: 150
+        ranking:
+          type: integer
+          description: Current ranking position (1 is best)
+          example: 1
+        last_updated:
+          type: string
+          format: date-time
+          description: When the ranking was last updated
+          example: 2024-01-15T12:00:00Z
+
+    PlayerRankingsResponse:
+      type: object
+      properties:
+        rankings:
+          type: array
+          items:
+            $ref: "#/components/schemas/PlayerRankingResponse"
+          description: List of player rankings
+        pagination:
+          $ref: "#/components/schemas/PaginationResponse"
+
+    PaginationResponse:
+      type: object
+      properties:
+        current_page:
+          type: integer
+          description: Current page number
+          example: 1
+        page_size:
+          type: integer
+          description: Number of items per page
+          example: 10
+        total_items:
+          type: integer
+          format: int64
+          description: Total number of items across all pages
+          example: 50
+        total_pages:
+          type: integer
+          description: Total number of pages
+          example: 5
+
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+          description: Error message describing what went wrong
+          example: Invalid email or password
+
+tags:
+  - name: Health
+    description: System health and status endpoints
+  - name: Authentication
+    description: User registration, login, and session management
+  - name: Videos
+    description: Video upload, management, and retrieval for authenticated users
+  - name: Public Videos
+    description: Public video access and discovery
+  - name: Voting
+    description: Video voting system with real-time ranking updates
+  - name: Rankings
+    description: Player ranking system based on video votes
