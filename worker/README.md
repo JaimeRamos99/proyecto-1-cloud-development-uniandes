@@ -204,3 +204,31 @@ S3 Bucket Layout:
    - Original video: `original/{video_id}.mp4`
    - Processed video: `processed/{video_id}.mp4`
    - Database status: `processed`
+
+## 🛡️ Resiliencia y Manejo de Errores
+
+El worker incluye mecanismos avanzados de resiliencia:
+
+### Exponential Backoff
+
+- **Reintentos automáticos** con retraso exponencial (2s, 4s, 8s...)
+- **Detección inteligente** de errores permanentes vs temporales
+- **Configuración flexible** vía variables de entorno
+
+### Dead Letter Queue (DLQ)
+
+- **Cola separada** para mensajes que fallan definitivamente
+- **Visibilidad completa** de videos problemáticos
+- **Configuración automática** en LocalStack
+
+### Variables de Configuración:
+
+```bash
+WORKER_ENABLE_BACKOFF=true    # Activar/desactivar reintentos
+WORKER_MAX_RETRIES=3          # Máximo reintentos
+WORKER_BASE_DELAY=2           # Retraso base en segundos
+WORKER_MAX_DELAY=60           # Retraso máximo en segundos
+DLQ_QUEUE_NAME=proyecto1-video-processing-dlq
+```
+
+**📖 Documentación completa**: Ver [`RESILIENCE_IMPLEMENTATION.md`](./RESILIENCE_IMPLEMENTATION.md) para detalles técnicos completos.

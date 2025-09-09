@@ -10,6 +10,7 @@ type Config struct {
 	App      AppConfig
 	Database DatabaseConfig
 	AWS      AWSConfig
+	Retry    RetryConfig
 }
 
 type AppConfig struct {
@@ -37,6 +38,15 @@ type AWSConfig struct {
 	EndpointURL     string // For LocalStack
 	S3BucketName    string
 	SQSQueueName    string
+	DLQQueueName    string // Dead Letter Queue name
+}
+
+// RetryConfig holds retry policy configuration
+type RetryConfig struct {
+	MaxRetries      int  // Maximum number of retry attempts
+	BaseDelay       int  // Base delay in seconds for exponential backoff
+	MaxDelay        int  // Maximum delay in seconds
+	EnableBackoff   bool // Enable exponential backoff
 }
 
 // Load reads configuration from environment variables with sensible defaults
@@ -65,6 +75,13 @@ func Load() *Config {
 			EndpointURL:     getEnv("AWS_ENDPOINT_URL", ""), // Empty for real AWS
 			S3BucketName:    getEnv("S3_BUCKET_NAME", "proyecto1-videos"),
 			SQSQueueName:    getEnv("SQS_QUEUE_NAME", "proyecto1-video-processing"),
+			DLQQueueName:    getEnv("DLQ_QUEUE_NAME", "proyecto1-video-processing-dlq"),
+		},
+		Retry: RetryConfig{
+			MaxRetries:    getEnvInt("WORKER_MAX_RETRIES", 3),
+			BaseDelay:     getEnvInt("WORKER_BASE_DELAY", 2),  // 2 seconds base delay
+			MaxDelay:      getEnvInt("WORKER_MAX_DELAY", 60),  // 60 seconds max delay
+			EnableBackoff: getEnvBool("WORKER_ENABLE_BACKOFF", true),
 		},
 	}
 }
@@ -82,6 +99,16 @@ func getEnvInt(key string, defaultValue int) int {
 	if value := os.Getenv(key); value != "" {
 		if intValue, err := strconv.Atoi(value); err == nil {
 			return intValue
+		}
+	}
+	return defaultValue
+}
+
+// getEnvBool gets an environment variable as boolean with a fallback default
+func getEnvBool(key string, defaultValue bool) bool {
+	if value := os.Getenv(key); value != "" {
+		if boolValue, err := strconv.ParseBool(value); err == nil {
+			return boolValue
 		}
 	}
 	return defaultValue

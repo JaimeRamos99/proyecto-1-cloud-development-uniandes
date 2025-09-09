@@ -69,7 +69,7 @@ func main() {
 	videoRepo := videos.NewRepository(db)
 
 	// Initialize worker service
-	workerService := internal.NewWorkerService(messageQueue, videoRepo, storageManager)
+	workerService := internal.NewWorkerService(messageQueue, videoRepo, storageManager, &cfg.Retry)
 
 	// Ensure worker service is closed on exit
 	defer func() {

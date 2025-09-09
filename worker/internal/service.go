@@ -5,11 +5,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"math"
 	"strconv"
 	"strings"
 	"time"
 
 	"worker/internal/ObjectStorage"
+	"worker/internal/config"
 	"worker/internal/messaging"
 	"worker/internal/videos"
 )
@@ -19,6 +21,7 @@ type WorkerService struct {
 	messageQueue   messaging.MessageQueue
 	videoRepo      *videos.Repository
 	storageManager *ObjectStorage.FileStorageManager
+	retryConfig    *config.RetryConfig
 }
 
 // NewWorkerService creates a new worker service
@@ -26,11 +29,13 @@ func NewWorkerService(
 	messageQueue messaging.MessageQueue,
 	videoRepo *videos.Repository,
 	storageManager *ObjectStorage.FileStorageManager,
+	retryConfig *config.RetryConfig,
 ) *WorkerService {
 	return &WorkerService{
 		messageQueue:   messageQueue,
 		videoRepo:      videoRepo,
 		storageManager: storageManager,
+		retryConfig:    retryConfig,
 	}
 }
 
@@ -71,9 +76,9 @@ func (s *WorkerService) processMessageBatch(ctx context.Context) error {
 	
 	// Process each message
 	for _, msg := range messages {
-		err := s.processMessage(ctx, msg)
+		err := s.processMessageWithRetry(ctx, msg)
 		if err != nil {
-			log.Printf("Error processing message %s: %v", msg.MessageID, err)
+			log.Printf("Error processing message %s after retries: %v", msg.MessageID, err)
 			// Continue processing other messages even if one fails
 			continue
 		}
@@ -89,8 +94,91 @@ func (s *WorkerService) processMessageBatch(ctx context.Context) error {
 	return nil
 }
 
+// processMessageWithRetry processes a message with exponential backoff retry logic
+func (s *WorkerService) processMessageWithRetry(ctx context.Context, msg *messaging.ReceivedMessage) error {
+	if !s.retryConfig.EnableBackoff {
+		// If retry is disabled, just process once
+		return s.processMessage(ctx, msg)
+	}
+
+	var lastErr error
+	maxRetries := s.retryConfig.MaxRetries
+	baseDelay := time.Duration(s.retryConfig.BaseDelay) * time.Second
+	maxDelay := time.Duration(s.retryConfig.MaxDelay) * time.Second
+
+	for attempt := 0; attempt <= maxRetries; attempt++ {
+		if attempt > 0 {
+			// Calculate exponential backoff delay
+			delay := time.Duration(math.Pow(2, float64(attempt-1))) * baseDelay
+			if delay > maxDelay {
+				delay = maxDelay
+			}
+			
+			log.Printf("Message %s failed on attempt %d, retrying after %v", msg.MessageID, attempt, delay)
+			
+			// Sleep with context cancellation support
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case <-time.After(delay):
+				// Continue to retry
+			}
+		}
+
+		// Attempt to process the message
+		lastErr = s.processMessage(ctx, msg)
+		if lastErr == nil {
+			if attempt > 0 {
+				log.Printf("Message %s succeeded on retry attempt %d", msg.MessageID, attempt+1)
+			}
+			return nil // Success
+		}
+
+		// Check if this is a permanent error that shouldn't be retried
+		if s.isPermanentError(lastErr) {
+			log.Printf("Message %s failed with permanent error, not retrying: %v", msg.MessageID, lastErr)
+			return lastErr
+		}
+		
+		log.Printf("Message %s attempt %d failed (will retry): %v", msg.MessageID, attempt+1, lastErr)
+	}
+
+	log.Printf("Message %s failed after %d attempts, giving up: %v", msg.MessageID, maxRetries+1, lastErr)
+	return fmt.Errorf("failed after %d attempts: %w", maxRetries+1, lastErr)
+}
+
+// isPermanentError determines if an error is permanent and shouldn't be retried
+func (s *WorkerService) isPermanentError(err error) bool {
+	if err == nil {
+		return false
+	}
+	
+	errStr := err.Error()
+	
+	// Video not found in database - permanent error
+	if strings.Contains(errStr, "not found in database") {
+		return true
+	}
+	
+	// Video already processed - permanent error
+	if strings.Contains(errStr, "already processed") {
+		return true
+	}
+	
+	// Invalid video format - permanent error
+	if strings.Contains(errStr, "invalid video format") || strings.Contains(errStr, "unsupported format") {
+		return true
+	}
+	
+	// All other errors are considered temporary and can be retried
+	return false
+}
+
 // processMessage processes a single video processing message
 func (s *WorkerService) processMessage(ctx context.Context, msg *messaging.ReceivedMessage) error {
+	// TODO: Add context cancellation support to storage operations
+	_ = ctx // Currently unused, but kept for future context-aware operations
+	
 	log.Printf("Processing message: %s", msg.MessageID)
 	
 	// Parse the message body
