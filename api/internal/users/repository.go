@@ -23,9 +23,9 @@ func (r *Repository) CreateUser(user *User) (*User, error) {
 		RETURNING id`
 
 	var id int
-	err := r.db.QueryRow(query, user.FirstName, user.LastName, user.Email, 
+	err := r.db.QueryRow(query, user.FirstName, user.LastName, user.Email,
 		user.PasswordHash, user.City, user.Country).Scan(&id)
-	
+
 	if err != nil {
 		// Check if it's a duplicate email error
 		if err.Error() == `pq: duplicate key value violates unique constraint "users_email_key"` {
@@ -41,13 +41,13 @@ func (r *Repository) CreateUser(user *User) (*User, error) {
 // EmailExists checks if an email already exists in the database
 func (r *Repository) EmailExists(email string) (bool, error) {
 	query := `SELECT EXISTS(SELECT 1 FROM users WHERE email = $1)`
-	
+
 	var exists bool
 	err := r.db.QueryRow(query, email).Scan(&exists)
 	if err != nil {
 		return false, fmt.Errorf("failed to check email existence: %w", err)
 	}
-	
+
 	return exists, nil
 }
 
@@ -63,7 +63,7 @@ func (r *Repository) GetUserByEmail(email string) (*User, error) {
 		&user.ID, &user.FirstName, &user.LastName, &user.Email,
 		&user.PasswordHash, &user.City, &user.Country,
 	)
-	
+
 	if err != nil {
 		return nil, fmt.Errorf("failed to get user by email: %w", err)
 	}

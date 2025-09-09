@@ -23,7 +23,7 @@ func (r *Repository) VoteForVideo(userID, videoID int) error {
 		INSERT INTO votes (user_id, video_id)
 		VALUES ($1, $2)
 	`
-	
+
 	_, err := r.db.Exec(query, userID, videoID)
 	if err != nil {
 		// Check if it's a unique constraint violation (user already voted)
@@ -32,7 +32,7 @@ func (r *Repository) VoteForVideo(userID, videoID int) error {
 		}
 		return fmt.Errorf("failed to create vote: %w", err)
 	}
-	
+
 	return nil
 }
 
@@ -42,21 +42,21 @@ func (r *Repository) RemoveVote(userID, videoID int) error {
 		DELETE FROM votes 
 		WHERE user_id = $1 AND video_id = $2
 	`
-	
+
 	result, err := r.db.Exec(query, userID, videoID)
 	if err != nil {
 		return fmt.Errorf("failed to remove vote: %w", err)
 	}
-	
+
 	rowsAffected, err := result.RowsAffected()
 	if err != nil {
 		return fmt.Errorf("failed to get rows affected: %w", err)
 	}
-	
+
 	if rowsAffected == 0 {
 		return fmt.Errorf("vote not found")
 	}
-	
+
 	return nil
 }
 
@@ -67,7 +67,7 @@ func (r *Repository) HasUserVoted(userID, videoID int) (bool, error) {
 		WHERE user_id = $1 AND video_id = $2
 		LIMIT 1
 	`
-	
+
 	var exists int
 	err := r.db.QueryRow(query, userID, videoID).Scan(&exists)
 	if err != nil {
@@ -76,7 +76,7 @@ func (r *Repository) HasUserVoted(userID, videoID int) (bool, error) {
 		}
 		return false, fmt.Errorf("failed to check vote existence: %w", err)
 	}
-	
+
 	return true, nil
 }
 
@@ -86,13 +86,13 @@ func (r *Repository) GetVideoVoteCount(videoID int) (int, error) {
 		SELECT COUNT(*) FROM votes 
 		WHERE video_id = $1
 	`
-	
+
 	var count int
 	err := r.db.QueryRow(query, videoID).Scan(&count)
 	if err != nil {
 		return 0, fmt.Errorf("failed to get vote count: %w", err)
 	}
-	
+
 	return count, nil
 }
 
@@ -103,7 +103,7 @@ func (r *Repository) VideoExists(videoID int) (bool, error) {
 		WHERE id = $1 AND deleted_at IS NULL
 		LIMIT 1
 	`
-	
+
 	var exists int
 	err := r.db.QueryRow(query, videoID).Scan(&exists)
 	if err != nil {
@@ -112,6 +112,6 @@ func (r *Repository) VideoExists(videoID int) (bool, error) {
 		}
 		return false, fmt.Errorf("failed to check video existence: %w", err)
 	}
-	
+
 	return true, nil
 }

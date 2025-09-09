@@ -17,6 +17,6 @@ type Video struct {
 
 // VideoStatus constants
 const (
-	StatusUploaded   = "uploaded"
-	StatusProcessed  = "processed"
+	StatusUploaded  = "uploaded"
+	StatusProcessed = "processed"
 )

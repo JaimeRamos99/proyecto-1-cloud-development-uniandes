@@ -119,4 +119,3 @@ func (r *Repository) RefreshRankings() error {
 	}
 	return nil
 }
-

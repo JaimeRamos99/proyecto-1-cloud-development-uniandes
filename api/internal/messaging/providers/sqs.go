@@ -24,10 +24,10 @@ type SQSQueue struct {
 func NewSQSQueue(cfg *config.AWSConfig) (*SQSQueue, error) {
 	// Configure AWS config options
 	var configOptions []func(*awsconfig.LoadOptions) error
-	
+
 	// Add region
 	configOptions = append(configOptions, awsconfig.WithRegion(cfg.Region))
-	
+
 	// Add credentials
 	configOptions = append(configOptions, awsconfig.WithCredentialsProvider(
 		credentials.NewStaticCredentialsProvider(

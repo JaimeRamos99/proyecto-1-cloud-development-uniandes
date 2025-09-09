@@ -20,7 +20,7 @@ func (suite *VideoProcessorTestSuite) SetupTest() {
 func (suite *VideoProcessorTestSuite) TestNewVideoProcessor() {
 	// Test that NewVideoProcessor creates a valid instance
 	processor := NewVideoProcessor()
-	
+
 	assert.NotNil(suite.T(), processor)
 	assert.Equal(suite.T(), "ffmpeg", processor.config.FFmpegPath)
 	assert.Equal(suite.T(), "/tmp", processor.config.TempDir)
@@ -42,9 +42,9 @@ func (suite *VideoProcessorTestSuite) TestNewVideoProcessor() {
 // Test video data validation
 func TestVideoDataValidation(t *testing.T) {
 	tests := []struct {
-		name     string
-		data     []byte
-		isValid  bool
+		name    string
+		data    []byte
+		isValid bool
 	}{
 		{
 			name:    "Valid video data",
@@ -87,12 +87,12 @@ func TestVideoDataValidation(t *testing.T) {
 // Test processor configuration
 func TestProcessorConfiguration(t *testing.T) {
 	processor := NewVideoProcessor()
-	
+
 	// Test default configuration
 	assert.Equal(t, "ffmpeg", processor.config.FFmpegPath)
 	assert.Equal(t, "/tmp", processor.config.TempDir)
 	assert.Equal(t, "/app/assets/watermark.png", processor.config.WatermarkPath)
-	
+
 	// Test that paths are not empty
 	assert.NotEmpty(t, processor.config.FFmpegPath)
 	assert.NotEmpty(t, processor.config.TempDir)

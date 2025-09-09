@@ -73,9 +73,9 @@ func TestValidStatus(t *testing.T) {
 // Test Video Title Validation
 func TestVideoTitleValidation(t *testing.T) {
 	tests := []struct {
-		name     string
-		title    string
-		isValid  bool
+		name    string
+		title   string
+		isValid bool
 	}{
 		{"Valid title", "My Amazing Video", true},
 		{"Title with numbers", "Video 123", true},
@@ -88,7 +88,7 @@ func TestVideoTitleValidation(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			video := &Video{Title: tt.title}
-			
+
 			if tt.isValid {
 				assert.NotEmpty(t, video.Title)
 				assert.LessOrEqual(t, len(video.Title), 255) // Assuming max 255 chars
@@ -106,9 +106,9 @@ func TestVideoTitleValidation(t *testing.T) {
 // Test User ID Validation
 func TestUserIDValidation(t *testing.T) {
 	tests := []struct {
-		name     string
-		userID   int
-		isValid  bool
+		name    string
+		userID  int
+		isValid bool
 	}{
 		{"Valid user ID", 1, true},
 		{"Large user ID", 999999, true},
@@ -119,7 +119,7 @@ func TestUserIDValidation(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			video := &Video{UserID: tt.userID}
-			
+
 			if tt.isValid {
 				assert.Greater(t, video.UserID, 0)
 			} else {
@@ -137,7 +137,7 @@ func TestVideoRepositoryTestSuite(t *testing.T) {
 // Integration-style tests (these would work with a real database)
 func TestVideoRepository_Integration(t *testing.T) {
 	t.Skip("Skipping integration tests - requires database setup")
-	
+
 	// These tests would be enabled when running with a test database
 	// They would test the actual Repository struct from repository.go
 	// against a real PostgreSQL database

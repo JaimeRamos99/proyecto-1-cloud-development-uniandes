@@ -20,7 +20,7 @@ func NewRouter(cfg *config.Config, db *database.DB) *gin.Engine {
 
 	// Initialize shared session store for token revocation
 	sessionStore := session.NewInMemorySessionStore()
-	
+
 	// Initialize handlers (passing shared session store to auth handler)
 	authHandler := handlers.NewAuthHandler(db, cfg, sessionStore)
 	videoHandler := handlers.NewVideoHandler(db, cfg)
@@ -58,15 +58,15 @@ func NewRouter(cfg *config.Config, db *database.DB) *gin.Engine {
 		public := api.Group("/public")
 		{
 			public.GET("/videos", videoHandler.GetPublicVideos)
-			
+
 			// Vote endpoints require authentication
 			public.POST("/videos/:video_id/vote", authMiddleware, voteHandler.VoteForVideo)
 			public.DELETE("/videos/:video_id/vote", authMiddleware, voteHandler.UnvoteForVideo)
-			
+
 			// Rankings endpoints (no authentication required)
 			public.GET("/rankings", rankingHandler.GetPlayerRankings)
 		}
 	}
-	
+
 	return router
 }

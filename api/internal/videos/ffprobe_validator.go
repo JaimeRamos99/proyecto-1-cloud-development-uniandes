@@ -50,7 +50,7 @@ func NewFFProbeValidator(tempDir string) *FFProbeValidator {
 	if tempDir == "" {
 		tempDir = "/tmp"
 	}
-	
+
 	return &FFProbeValidator{
 		ffprobePath: "ffprobe", // Assumes ffprobe is in PATH (installed via Docker)
 		tempDir:     tempDir,
@@ -61,9 +61,9 @@ func NewFFProbeValidator(tempDir string) *FFProbeValidator {
 func DefaultValidationRules() ValidationRules {
 	return ValidationRules{
 		MaxSizeBytes: 100 * 1024 * 1024, // 100MB
-		MinDuration:  20,                 // 20 seconds
-		MaxDuration:  60,                 // 60 seconds
-		MinHeight:    1080,               // Greater than 1080p
+		MinDuration:  20,                // 20 seconds
+		MaxDuration:  60,                // 60 seconds
+		MinHeight:    1080,              // Greater than 1080p
 	}
 }
 
@@ -99,7 +99,7 @@ func (v *FFProbeValidator) ValidateVideo(file *multipart.FileHeader, rules Valid
 func (v *FFProbeValidator) quickValidation(file *multipart.FileHeader, rules ValidationRules) error {
 	// Check file size first (fastest check)
 	if file.Size > rules.MaxSizeBytes {
-		return fmt.Errorf("file too large: %d bytes (max: %d bytes / %.1fMB)", 
+		return fmt.Errorf("file too large: %d bytes (max: %d bytes / %.1fMB)",
 			file.Size, rules.MaxSizeBytes, float64(rules.MaxSizeBytes)/(1024*1024))
 	}
 
@@ -144,10 +144,10 @@ func (v *FFProbeValidator) saveToTempFile(file *multipart.FileHeader) (string, e
 func (v *FFProbeValidator) analyzeWithFFProbe(tempFile string, fileSize int64) (*VideoMetadata, error) {
 	// Execute ffprobe with JSON output
 	cmd := exec.Command(v.ffprobePath,
-		"-v", "quiet",           // Suppress verbose output
+		"-v", "quiet", // Suppress verbose output
 		"-print_format", "json", // Output as JSON
-		"-show_format",          // Show container format info
-		"-show_streams",         // Show stream info (video, audio)
+		"-show_format",  // Show container format info
+		"-show_streams", // Show stream info (video, audio)
 		tempFile,
 	)
 
@@ -274,12 +274,12 @@ func (v *FFProbeValidator) isValidMP4Format(formatName string) bool {
 func (v *FFProbeValidator) isValidVideoCodec(codecName string) bool {
 	// Accept common MP4 video codecs
 	validCodecs := []string{
-		"h264",    // Most common (AVC)
-		"h265",    // HEVC
-		"hevc",    // HEVC alternative name
-		"avc1",    // H.264 in MP4 container
-		"hvc1",    // H.265 in MP4 container
-		"mp4v",    // MPEG-4 Part 2
+		"h264", // Most common (AVC)
+		"h265", // HEVC
+		"hevc", // HEVC alternative name
+		"avc1", // H.264 in MP4 container
+		"hvc1", // H.265 in MP4 container
+		"mp4v", // MPEG-4 Part 2
 	}
 
 	codecLower := strings.ToLower(codecName)

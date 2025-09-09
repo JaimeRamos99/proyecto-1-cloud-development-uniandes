@@ -19,7 +19,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("Failed to initialize database: %v", err)
 	}
-	
+
 	// Ensure database is closed on exit
 	if db != nil {
 		defer func() {
@@ -37,7 +37,7 @@ func main() {
 
 	// Start server
 	addr := cfg.Server.Host + ":" + cfg.Server.Port
-	log.Printf("Starting %s v%s on %s (env: %s)", 
+	log.Printf("Starting %s v%s on %s (env: %s)",
 		cfg.App.Name, cfg.App.Version, addr, cfg.App.Env)
 
 	if err := router.Run(addr); err != nil {

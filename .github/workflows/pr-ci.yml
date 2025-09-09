@@ -1,4 +1,4 @@
-name: 🚀 Simple CI Pipeline
+name: CI
 
 on:
   pull_request:
@@ -14,10 +14,10 @@ env:
 
 jobs:
   # ============================================================================
-  # 🔧 BUILD & TEST
+  # BUILD & TEST
   # ============================================================================
   build-and-test:
-    name: 🔧 Build & Test
+    name: Build and Test
     runs-on: ubuntu-latest
 
     services:
@@ -36,10 +36,10 @@ jobs:
           - 5432:5432
 
     steps:
-      - name: 📥 Checkout code
+      - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: 🐹 Set up Go
+      - name: Set up Go
         uses: actions/setup-go@v4
         with:
           go-version: ${{ env.GO_VERSION }}
@@ -116,16 +116,16 @@ jobs:
           retention-days: 7
 
   # ============================================================================
-  # 🐳 DOCKER BUILD (only on main branch)
+  # DOCKER BUILD (only on main branch)
   # ============================================================================
   docker-build:
-    name: 🐳 Docker Build
+    name: Docker Build
     runs-on: ubuntu-latest
     needs: build-and-test
     if: github.ref == 'refs/heads/main'
 
     steps:
-      - name: 📥 Checkout code
+      - name: Checkout code
         uses: actions/checkout@v4
 
       - name: 🐳 Build API Docker image

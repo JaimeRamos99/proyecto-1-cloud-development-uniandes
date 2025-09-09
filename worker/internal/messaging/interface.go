@@ -8,10 +8,10 @@ import (
 type MessageQueue interface {
 	// ReceiveMessages receives messages from the queue with long polling
 	ReceiveMessages(ctx context.Context, maxMessages int32, waitTimeSeconds int32) ([]*ReceivedMessage, error)
-	
+
 	// DeleteMessage removes a processed message from the queue
 	DeleteMessage(ctx context.Context, receiptHandle string) error
-	
+
 	// Close closes the connection to the message queue
 	Close() error
 }
