@@ -35,6 +35,7 @@ services:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
     depends_on:
       - api
+      - frontend
     networks:
       - proyecto0-local-network
     restart: unless-stopped
@@ -182,6 +183,23 @@ services:
     networks:
       - proyecto0-local-network
     restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./front
+      dockerfile: Dockerfile
+    container_name: proyecto1-frontend-local
+    expose:
+      - "80"
+    networks:
+      - proyecto0-local-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
 
   docs:
     image: swaggerapi/swagger-ui

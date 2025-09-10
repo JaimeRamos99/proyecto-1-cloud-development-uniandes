@@ -289,6 +289,11 @@ func (h *VideoHandler) GetPublicVideos(c *gin.Context) {
 		return
 	}
 
+	// Ensure we return an empty array instead of null
+	if videos == nil {
+		videos = []*dto.PublicVideoResponse{} // Fixed type
+	}
+
 	// Update vote counts for all videos
 	for _, video := range videos {
 		voteCount, err := h.voteService.GetVideoVoteCount(video.VideoID)
