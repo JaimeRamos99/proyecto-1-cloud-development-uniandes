@@ -1,18 +1,20 @@
 # Proyecto_1 Makefile
 
-.PHONY: help local clean build logs health test-api test-startup nginx-logs api-logs db-logs localstack-logs worker-logs rebuild-api rebuild-worker stop localstack-health localstack-test storage-test docs docs-stop
+.PHONY: help local clean build logs health test-api test-startup nginx-logs api-logs db-logs localstack-logs worker-logs frontend-logs rebuild-api rebuild-worker rebuild-frontend stop localstack-health localstack-test storage-test docs docs-stop
 
 # Default target
 help:
 	@echo "Available commands:"
-	@echo "  local           - Start full local environment (nginx + API + Worker + PostgreSQL + LocalStack)"
-	@echo "  build           - Build the Go applications (API + Worker)"
+	@echo "  local           - Start full local environment (nginx + Frontend + API + Worker + PostgreSQL + LocalStack)"
+	@echo "  build           - Build the Go applications (API + Worker) and Frontend"
 	@echo "  rebuild-api     - Rebuild and restart only the API container"
 	@echo "  rebuild-worker  - Rebuild and restart only the Worker container"
+	@echo "  rebuild-frontend - Rebuild and restart only the Frontend container"
 	@echo "  logs            - Show logs from all containers"
 	@echo "  nginx-logs      - Show logs from nginx container only"
 	@echo "  api-logs        - Show logs from API container only"
 	@echo "  worker-logs     - Show logs from Worker container only"
+	@echo "  frontend-logs   - Show logs from Frontend container only"
 	@echo "  db-logs         - Show logs from PostgreSQL container only"
 	@echo "  localstack-logs - Show logs from LocalStack container only"
 	@echo "  health          - Check health status of all services"
@@ -28,11 +30,11 @@ help:
 
 # Local: Full local environment with nginx proxy and LocalStack
 local:
-	@echo "🚀 Starting full local environment with nginx proxy, LocalStack, Worker, and Documentation..."
+	@echo "🚀 Starting full local environment with nginx proxy, Frontend, LocalStack, Worker, and Documentation..."
 	docker-compose -f docker-compose.local.yml up -d
 	@echo ""
 	@echo "✅ Services are starting up..."
-	@echo "🌐 nginx proxy:      http://localhost:80"
+	@echo "🌐 Frontend:         http://localhost:80"
 	@echo "🔗 API endpoints:    http://localhost:80/api"
 	@echo "📚 API docs:         http://localhost:8080"
 	@echo "🤖 Worker service:   Running in background (processing video queue)"
@@ -47,12 +49,6 @@ local:
 	@echo "  💀 SQS DLQ:         proyecto1-video-processing-dlq"
 	@echo "  🔍 Health:          http://localhost:4566/_localstack/health"
 	@echo ""
-	@echo "Available API endpoints:"
-	@echo "  POST http://localhost:80/api/auth/signup"
-	@echo "  POST http://localhost:80/api/auth/login"
-	@echo "  POST http://localhost:80/api/auth/logout"
-	@echo "  POST http://localhost:80/api/videos/upload (requires JWT)"
-	@echo ""
 	@echo "📝 Next steps:"
 	@echo "  1. Wait ~60s for all services to initialize"
 	@echo "  2. Run 'make health' to verify all services"
@@ -60,9 +56,9 @@ local:
 	@echo "  4. Run 'make test-api' to test API endpoints"
 	@echo "  5. Run 'make worker-logs' to monitor video processing"
 
-# Build the Go applications
+# Build the Go applications and Frontend
 build:
-	@echo "🔨 Building Go applications..."
+	@echo "🔨 Building applications..."
 	@echo "Building API..."
 	cd api && go mod tidy
 	cd api && go build -o bin/api cmd/api/main.go
@@ -72,6 +68,11 @@ build:
 	cd worker && go mod tidy
 	cd worker && go build -o bin/worker cmd/worker/main.go
 	@echo "✅ Worker binary created at worker/bin/worker"
+	@echo ""
+	@echo "Building Frontend..."
+	cd front && npm ci
+	cd front && npm run build
+	@echo "✅ Frontend built successfully"
 
 # Rebuild and restart only the API container
 rebuild-api:
@@ -88,6 +89,14 @@ rebuild-worker:
 	docker-compose -f docker-compose.local.yml up -d worker
 	@echo "✅ Worker container rebuilt and restarted"
 	@echo "💡 Run 'make worker-logs' if you want to see the logs"
+
+# Rebuild and restart only the Frontend container
+rebuild-frontend:
+	@echo "🔄 Rebuilding Frontend container..."
+	docker-compose -f docker-compose.local.yml build frontend
+	docker-compose -f docker-compose.local.yml up -d frontend
+	@echo "✅ Frontend container rebuilt and restarted"
+	@echo "💡 Run 'make frontend-logs' if you want to see the logs"
 
 # Show all logs
 logs:
@@ -107,6 +116,11 @@ api-logs:
 worker-logs:
 	@echo "🤖 Worker logs:"
 	docker logs -f proyecto1-worker-local
+
+# Show Frontend logs only
+frontend-logs:
+	@echo "🌐 Frontend logs:"
+	docker logs -f proyecto1-frontend-local
 
 # Show database logs only
 db-logs:
@@ -142,6 +156,9 @@ health:
 	@echo ""
 	@echo "🔍 Worker container status:"
 	@docker ps --filter name=proyecto1-worker-local --format "table {{.Names}}\t{{.Status}}" | tail -n +2 | while read line; do echo " $$line"; done
+	@echo ""
+	@echo "🔍 Frontend container status:"
+	@docker ps --filter name=proyecto1-frontend-local --format "table {{.Names}}\t{{.Status}}" | tail -n +2 | while read line; do echo " $$line"; done
 	@echo ""
 	@echo "🔍 All containers:"
 	@docker-compose -f docker-compose.local.yml ps
