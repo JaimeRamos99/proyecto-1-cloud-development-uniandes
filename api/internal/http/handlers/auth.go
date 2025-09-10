@@ -11,6 +11,8 @@ import (
 	"proyecto1/root/internal/users"
 
 	"github.com/gin-gonic/gin"
+	"github.com/golang-jwt/jwt/v5"
+
 )
 
 type AuthHandler struct {
@@ -97,4 +99,38 @@ func (h *AuthHandler) Logout(c *gin.Context) {
 	token := authHeader[len(prefix):]
 	h.sessions.RevokeToken(token, time.Now().Add(24*time.Hour))
 	c.JSON(http.StatusOK, gin.H{"message": "logged out"})
+}
+
+func (h *AuthHandler) GetProfile(c *gin.Context) {
+	// Get user ID from JWT claims (guaranteed to exist by AuthMiddleware)
+	claims := c.MustGet("claims").(jwt.MapClaims)
+	userID := int(claims["user_id"].(float64))
+
+	// Get user profile from service
+	user, err := h.userService.GetUserByID(userID)
+	if err != nil {
+		c.JSON(http.StatusNotFound, dto.ErrorResponse{
+			Error: "User not found",
+		})
+		return
+	}
+
+	// Create profile response using the same structure as LoginResponse.User
+	response := struct {
+		ID        int    `json:"id"`
+		FirstName string `json:"first_name"`
+		LastName  string `json:"last_name"`
+		Email     string `json:"email"`
+		City      string `json:"city"`
+		Country   string `json:"country"`
+	}{
+		ID:        user.ID,
+		FirstName: user.FirstName,
+		LastName:  user.LastName,
+		Email:     user.Email,
+		City:      user.City,
+		Country:   user.Country,
+	}
+
+	c.JSON(http.StatusOK, response)
 }

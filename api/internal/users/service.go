@@ -118,3 +118,14 @@ func (s *Service) Login(req dto.LoginRequest) (*dto.LoginResponse, error) {
 
 	return response, nil
 }
+
+// GetUserByID retrieves a user by their ID
+func (s *Service) GetUserByID(userID int) (*User, error) {
+	// Get user from repository
+	user, err := s.repo.GetUserByID(userID)
+	if err != nil {
+		return nil, errors.New("user not found")
+	}
+
+	return user, nil
+}
