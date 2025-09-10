@@ -189,7 +189,7 @@ services:
     ports:
       - "8080:8080"
     environment:
-      - SWAGGER_JSON=/tmp/swagger.yaml
+      - SWAGGER_JSON=/tmp/Entrega_1/swagger.yaml
     volumes:
       - ./docs:/tmp:ro
     networks:

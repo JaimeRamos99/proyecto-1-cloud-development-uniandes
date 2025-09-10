@@ -6,7 +6,7 @@ Esta carpeta contiene la documentación completa de la API de la plataforma de v
 
 ### Archivos disponibles:
 
-- `swagger.yaml` - Especificación completa de la API en formato OpenAPI 3.0.3
+- `Entrega_1/swagger.yaml` - Especificación completa de la API en formato OpenAPI 3.0.3
 
 ### 🌟 Características documentadas:
 
@@ -50,7 +50,7 @@ Esta carpeta contiene la documentación completa de la API de la plataforma de v
 #### **Opción 1: Swagger UI online**
 
 1. Ve a [Swagger Editor](https://editor.swagger.io/)
-2. Copia el contenido de `swagger.yaml`
+2. Copia el contenido de `Entrega_1/swagger.yaml`
 3. Pégalo en el editor para visualizar interactivamente
 
 #### **Opción 2: Localmente con Docker**
@@ -60,7 +60,7 @@ Esta carpeta contiene la documentación completa de la API de la plataforma de v
 cd docs
 
 # Ejecuta Swagger UI con Docker
-docker run -p 8080:8080 -v $(pwd):/usr/share/nginx/html -e SWAGGER_JSON=/usr/share/nginx/html/swagger.yaml swaggerapi/swagger-ui
+docker run -p 8080:8080 -v $(pwd):/usr/share/nginx/html -e SWAGGER_JSON=/usr/share/nginx/html/Entrega_1/swagger.yaml swaggerapi/swagger-ui
 
 # Abre http://localhost:8080 en tu navegador
 ```
