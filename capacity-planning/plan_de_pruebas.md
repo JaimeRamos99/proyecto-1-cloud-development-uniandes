@@ -1,4 +1,4 @@
-# Plan de Pruebas de Carga - Sistema de Procesamiento de Video
+# Plan de Pruebas de Carga - ANB
 
 ## 1. Herramienta de Pruebas de Carga
 
