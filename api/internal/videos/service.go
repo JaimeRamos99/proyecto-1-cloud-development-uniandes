@@ -244,6 +244,7 @@ func (s *Service) CheckFFProbeInstallation() error {
 	return s.validator.CheckFFProbeInstallation()
 }
 
+// GetPublicVideos retrieves all public videos with presigned URLs (only processed videos)
 func (s *Service) GetPublicVideos() ([]*dto.PublicVideoResponse, error) {
 	// Get all public videos from database
 	videos, err := s.repo.GetPublicVideos()
