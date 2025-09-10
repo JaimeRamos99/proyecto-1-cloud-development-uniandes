@@ -54,21 +54,28 @@ class ApiService {
     }
 
     async signup(userData) {
+        console.log('Raw userData received:', userData); // Add this line
+        
+        const payload = {
+            first_name: userData.firstName,
+            last_name: userData.lastName,
+            email: userData.email,
+            password1: userData.password,
+            password2: userData.confirmPassword,
+            city: userData.city,
+            country: userData.country || 'Colombia',
+        };
+        
+        console.log('Constructed payload:', payload); // Add this line
+        console.log('Stringified payload:', JSON.stringify(payload)); // Add this line
+        
         const response = await this.request('/api/auth/signup', {
             method: 'POST',
-            body: JSON.stringify({
-                first_name: userData.firstName,
-                last_name: userData.lastName,
-                email: userData.email,
-                password1: userData.password,
-                password2: userData.confirmPassword,
-                city: userData.city,
-                country: userData.country || 'Colombia',
-            }),
+            body: JSON.stringify(payload),
         });
         return response;
     }
-
+    
     async login(email, password) {
         const response = await this.request('/api/auth/login', {
             method: 'POST',

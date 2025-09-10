@@ -98,3 +98,34 @@ func (h *AuthHandler) Logout(c *gin.Context) {
 	h.sessions.RevokeToken(token, time.Now().Add(24*time.Hour))
 	c.JSON(http.StatusOK, gin.H{"message": "logged out"})
 }
+
+// GetProfile handles getting user profile information
+func (h *AuthHandler) GetProfile(c *gin.Context) {
+	userID, exists := c.Get("user_id")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, dto.ErrorResponse{
+			Error: "unauthorized",
+		})
+		return
+	}
+
+	// Convert userID to int
+	id, ok := userID.(int)
+	if !ok {
+		c.JSON(http.StatusInternalServerError, dto.ErrorResponse{
+			Error: "invalid user ID format",
+		})
+		return
+	}
+
+	// Get user profile from service
+	profile, err := h.userService.GetProfile(id)
+	if err != nil {
+		c.JSON(http.StatusNotFound, dto.ErrorResponse{
+			Error: err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, profile)
+}
