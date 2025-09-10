@@ -82,7 +82,7 @@ func (r *Repository) GetUserByID(userID int) (*User, error) {
 		&user.ID, &user.FirstName, &user.LastName, &user.Email,
 		&user.PasswordHash, &user.City, &user.Country,
 	)
-	
+
 	if err != nil {
 		return nil, fmt.Errorf("failed to get user by ID: %w", err)
 	}
