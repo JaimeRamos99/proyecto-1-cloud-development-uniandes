@@ -280,7 +280,7 @@ func (h *VideoHandler) DeleteVideo(c *gin.Context) {
 
 // GetPublicVideos retrieves all public videos without authentication
 func (h *VideoHandler) GetPublicVideos(c *gin.Context) {
-	// Get all public videos from service (returns []*dto.PublicVideoResponse)
+	// Get all public videos from service
 	videos, err := h.videoService.GetPublicVideos()
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, dto.ErrorResponse{
@@ -289,7 +289,7 @@ func (h *VideoHandler) GetPublicVideos(c *gin.Context) {
 		return
 	}
 
-	// ✅ Ensure we return an empty array instead of null
+	// Ensure we return an empty array instead of null
 	if videos == nil {
 		videos = []*dto.PublicVideoResponse{} // Fixed type
 	}
@@ -309,6 +309,6 @@ func (h *VideoHandler) GetPublicVideos(c *gin.Context) {
 	// Log for debugging (can be removed in production)
 	log.Printf("Retrieved %d public videos", len(videos))
 
-	// Return the list of public videos (guaranteed to be an array)
+	// Return the list of public videos
 	c.JSON(http.StatusOK, videos)
 }

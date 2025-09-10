@@ -158,9 +158,8 @@ func (s *Service) GetUserVideos(userID int) ([]*dto.VideoResponse, error) {
 		return nil, fmt.Errorf("failed to get user videos: %w", err)
 	}
 
-	responses := make([]*dto.VideoResponse, 0)
-
 	// Convert to response format with presigned URLs
+	var responses []*dto.VideoResponse
 	for _, video := range videos {
 		// Generate presigned URLs for original and processed videos
 		originalS3Key := fmt.Sprintf("original/%d.mp4", video.ID)
@@ -252,9 +251,8 @@ func (s *Service) GetPublicVideos() ([]*dto.PublicVideoResponse, error) {
 		return nil, fmt.Errorf("failed to get public videos: %w", err)
 	}
 
-	responses := make([]*dto.PublicVideoResponse, 0)
-
 	// Convert to public response format with presigned URLs (only processed videos)
+	var responses []*dto.PublicVideoResponse
 	for _, video := range videos {
 		// Generate presigned URL only for processed video
 		processedS3Key := fmt.Sprintf("processed/%d.mp4", video.ID)
@@ -265,9 +263,6 @@ func (s *Service) GetPublicVideos() ([]*dto.PublicVideoResponse, error) {
 			// Log error but continue with empty URL
 			fmt.Printf("Warning: Failed to generate processed video URL for video %d: %v\n", video.ID, err)
 			processedURL = ""
-		} else {
-			// Replace localstack hostname with localhost for browser access
-			processedURL = strings.Replace(processedURL, "http://localstack:4566", "http://localhost:4566", 1)
 		}
 
 		// Create public response with processed URL only (no original URL field)
