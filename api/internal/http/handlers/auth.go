@@ -12,7 +12,6 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
-
 )
 
 type AuthHandler struct {
@@ -33,7 +32,7 @@ func NewAuthHandler(db *database.DB, cfg *config.Config, sessionStore *session.I
 // Signup handles user registration HTTP request
 func (h *AuthHandler) Signup(c *gin.Context) {
 	var req dto.SignupRequest
-	
+
 	// Bind JSON to struct
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, dto.ErrorResponse{
@@ -57,7 +56,7 @@ func (h *AuthHandler) Signup(c *gin.Context) {
 // Login handles user login
 func (h *AuthHandler) Login(c *gin.Context) {
 	var req dto.LoginRequest
-	
+
 	// Bind JSON to struct
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, dto.ErrorResponse{
@@ -88,14 +87,14 @@ func (h *AuthHandler) Logout(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "authorization header required"})
 		return
 	}
-	
+
 	// Expecting format: "Bearer <token>"
 	const prefix = "Bearer "
 	if len(authHeader) <= len(prefix) || authHeader[:len(prefix)] != prefix {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid authorization header"})
 		return
 	}
-	
+
 	token := authHeader[len(prefix):]
 	h.sessions.RevokeToken(token, time.Now().Add(24*time.Hour))
 	c.JSON(http.StatusOK, gin.H{"message": "logged out"})

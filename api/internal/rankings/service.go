@@ -26,21 +26,21 @@ func (s *Service) GetPlayerRankings(filters RankingFilters, pagination Paginatio
 	var rankingDTOs []dto.PlayerRankingResponse
 	for _, ranking := range rankings {
 		rankingDTOs = append(rankingDTOs, dto.PlayerRankingResponse{
-			UserID:            ranking.UserID,
-			FirstName:         ranking.FirstName,
-			LastName:          ranking.LastName,
-			Email:             ranking.Email,
-			City:              ranking.City,
-			Country:           ranking.Country,
-			TotalVotes:        ranking.TotalVotes,
-			Ranking:           ranking.Ranking,
-			LastUpdated:       ranking.LastUpdated,
+			UserID:      ranking.UserID,
+			FirstName:   ranking.FirstName,
+			LastName:    ranking.LastName,
+			Email:       ranking.Email,
+			City:        ranking.City,
+			Country:     ranking.Country,
+			TotalVotes:  ranking.TotalVotes,
+			Ranking:     ranking.Ranking,
+			LastUpdated: ranking.LastUpdated,
 		})
 	}
 
 	// Calculate pagination metadata
 	totalPages := int(math.Ceil(float64(totalCount) / float64(pagination.PageSize)))
-	
+
 	paginationResponse := dto.PaginationResponse{
 		CurrentPage: pagination.Page,
 		PageSize:    pagination.PageSize,
@@ -67,14 +67,14 @@ func (s *Service) GetPlayerRanking(userID int) (*dto.PlayerRankingResponse, erro
 	}
 
 	return &dto.PlayerRankingResponse{
-		UserID:            ranking.UserID,
-		FirstName:         ranking.FirstName,
-		LastName:          ranking.LastName,
-		Email:             ranking.Email,
-		City:              ranking.City,
-		Country:           ranking.Country,
-		TotalVotes:        ranking.TotalVotes,
-		Ranking:           ranking.Ranking,
-		LastUpdated:       ranking.LastUpdated,
+		UserID:      ranking.UserID,
+		FirstName:   ranking.FirstName,
+		LastName:    ranking.LastName,
+		Email:       ranking.Email,
+		City:        ranking.City,
+		Country:     ranking.Country,
+		TotalVotes:  ranking.TotalVotes,
+		Ranking:     ranking.Ranking,
+		LastUpdated: ranking.LastUpdated,
 	}, nil
 }

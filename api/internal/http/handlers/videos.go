@@ -28,18 +28,18 @@ type VideoHandler struct {
 func NewVideoHandler(db *database.DB, cfg *config.Config) *VideoHandler {
 	// Create storage manager based on configuration
 	storageManager := createStorageManager(cfg)
-	
+
 	// Create message queue service
 	messageQueue := createMessageQueue(cfg)
-	
+
 	// Create repository and service with storage manager and message queue
 	repo := videos.NewRepository(db)
 	service := videos.NewService(repo, storageManager, messageQueue)
-	
+
 	// Create vote service
 	voteRepo := votes.NewRepository(db)
 	voteService := votes.NewService(voteRepo)
-	
+
 	return &VideoHandler{
 		videoService: service,
 		voteService:  voteService,
@@ -56,13 +56,13 @@ func createStorageManager(cfg *config.Config) *ObjectStorage.FileStorageManager 
 		BucketName:      cfg.AWS.S3BucketName,
 		EndpointURL:     cfg.AWS.EndpointURL, // LocalStack URL in development, empty for production AWS
 	}
-	
+
 	// Create S3 provider (works with both LocalStack and real AWS)
 	s3Provider, err := providers.NewS3Provider(s3Config)
 	if err != nil {
 		panic("Failed to create S3 storage provider: " + err.Error())
 	}
-	
+
 	return ObjectStorage.NewFileStorageManager(s3Provider)
 }
 
@@ -254,7 +254,7 @@ func (h *VideoHandler) DeleteVideo(c *gin.Context) {
 	err = h.videoService.DeleteVideo(videoID, userID)
 	if err != nil {
 		errMsg := err.Error()
-		
+
 		if strings.Contains(errMsg, "video not found or not owned by user") {
 			c.JSON(http.StatusNotFound, dto.ErrorResponse{
 				Error: "Video not found or not accessible",

@@ -23,7 +23,7 @@ func NewVoteHandler(db *database.DB) *VoteHandler {
 	// Create repository and service
 	repo := votes.NewRepository(db)
 	service := votes.NewService(repo)
-	
+
 	return &VoteHandler{
 		voteService: service,
 	}
@@ -57,10 +57,10 @@ func (h *VoteHandler) VoteForVideo(c *gin.Context) {
 	err = h.voteService.VoteForVideo(userID, videoID)
 	if err != nil {
 		errMsg := err.Error()
-		
+
 		// Log the actual error for debugging
 		log.Printf("Error voting for video %d by user %d: %v", videoID, userID, err)
-		
+
 		if strings.Contains(errMsg, "video not found") {
 			c.JSON(http.StatusNotFound, dto.ErrorResponse{
 				Error: "Video not found or has been deleted",
@@ -125,7 +125,7 @@ func (h *VoteHandler) UnvoteForVideo(c *gin.Context) {
 	err = h.voteService.RemoveVote(userID, videoID)
 	if err != nil {
 		errMsg := err.Error()
-		
+
 		if strings.Contains(errMsg, "video not found") {
 			c.JSON(http.StatusNotFound, dto.ErrorResponse{
 				Error: "Video not found or has been deleted",

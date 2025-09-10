@@ -8,7 +8,7 @@ import (
 type MessageQueue interface {
 	// SendMessage sends a message to the queue
 	SendMessage(ctx context.Context, message Message) error
-	
+
 	// Close closes the connection to the message queue
 	Close() error
 }

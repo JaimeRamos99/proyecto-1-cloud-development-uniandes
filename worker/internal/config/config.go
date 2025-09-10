@@ -19,13 +19,13 @@ type AppConfig struct {
 }
 
 type DatabaseConfig struct {
-	Host     string
-	Port     string
-	Name     string
-	User     string
-	Password string
-	SSLMode  string
-	Driver   string // postgres, memory
+	Host         string
+	Port         string
+	Name         string
+	User         string
+	Password     string
+	SSLMode      string
+	Driver       string // postgres, memory
 	MaxOpenConns int
 	MaxIdleConns int
 }

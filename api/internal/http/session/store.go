@@ -31,18 +31,18 @@ func (s *InMemorySessionStore) RevokeToken(token string, expiration time.Time) {
 func (s *InMemorySessionStore) IsTokenRevoked(token string) bool {
 	s.mutex.RLock()
 	defer s.mutex.RUnlock()
-	
+
 	expiration, exists := s.revoked[token]
 	if !exists {
 		return false
 	}
-	
+
 	// Clean up expired tokens
 	if time.Now().After(expiration) {
 		delete(s.revoked, token)
 		return false
 	}
-	
+
 	return true
 }
 
@@ -50,7 +50,7 @@ func (s *InMemorySessionStore) IsTokenRevoked(token string) bool {
 func (s *InMemorySessionStore) CleanExpiredTokens() {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
-	
+
 	now := time.Now()
 	for token, expiration := range s.revoked {
 		if now.After(expiration) {

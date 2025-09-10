@@ -39,7 +39,7 @@ func (s *Service) Signup(req dto.SignupRequest) (*dto.SignupResponse, error) {
 	if err != nil {
 		return nil, errors.New("failed to validate email")
 	}
-	
+
 	if exists {
 		return nil, errors.New("email already exists")
 	}

@@ -24,10 +24,10 @@ type SQSQueue struct {
 func NewSQSQueue(cfg *config.AWSConfig) (*SQSQueue, error) {
 	// Configure AWS config options
 	var configOptions []func(*awsconfig.LoadOptions) error
-	
+
 	// Add region
 	configOptions = append(configOptions, awsconfig.WithRegion(cfg.Region))
-	
+
 	// Add credentials
 	configOptions = append(configOptions, awsconfig.WithCredentialsProvider(
 		credentials.NewStaticCredentialsProvider(
@@ -75,12 +75,12 @@ func (s *SQSQueue) ReceiveMessages(ctx context.Context, maxMessages int32, waitT
 	if waitTimeSeconds > 20 {
 		waitTimeSeconds = 20
 	}
-	
+
 	// SQS maximum messages per request is 10
 	if maxMessages > 10 {
 		maxMessages = 10
 	}
-	
+
 	result, err := s.client.ReceiveMessage(ctx, &sqs.ReceiveMessageInput{
 		QueueUrl:            aws.String(s.queueURL),
 		MaxNumberOfMessages: maxMessages,
@@ -92,7 +92,7 @@ func (s *SQSQueue) ReceiveMessages(ctx context.Context, maxMessages int32, waitT
 	if err != nil {
 		return nil, fmt.Errorf("failed to receive messages from SQS: %w", err)
 	}
-	
+
 	// Convert SQS messages to our internal format
 	messages := make([]*messaging.ReceivedMessage, len(result.Messages))
 	for i, msg := range result.Messages {
@@ -102,7 +102,7 @@ func (s *SQSQueue) ReceiveMessages(ctx context.Context, maxMessages int32, waitT
 			MessageID:     aws.ToString(msg.MessageId),
 		}
 	}
-	
+
 	return messages, nil
 }
 
@@ -115,7 +115,7 @@ func (s *SQSQueue) DeleteMessage(ctx context.Context, receiptHandle string) erro
 	if err != nil {
 		return fmt.Errorf("failed to delete message from SQS: %w", err)
 	}
-	
+
 	return nil
 }
 
