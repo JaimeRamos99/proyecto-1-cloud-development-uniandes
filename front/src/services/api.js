@@ -8,8 +8,6 @@ class ApiService {
 
     async request(endpoint, options = {}) {
         const url = `${this.baseURL}${endpoint}`;
-        console.log('🔥 API Request:', url, options);
-    
         const config = {
             headers: {
                 'Content-Type': 'application/json',
@@ -18,9 +16,12 @@ class ApiService {
             ...options,
         };
 
-        if (this.token) {
-            config.headers.Authorization = `Bearer ${this.token}`;
+        const token = this.token || localStorage.getItem('access_token');
+        if (token) {
+            config.headers.Authorization = `Bearer ${token}`;
         }
+        console.log('🔑 Using token:', token);  
+        console.log('📡 Headers:', config.headers);
 
         try {
             const response = await fetch(url, config);

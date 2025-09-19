@@ -98,3 +98,35 @@ func (h *AuthHandler) Logout(c *gin.Context) {
 	h.sessions.RevokeToken(token, time.Now().Add(24*time.Hour))
 	c.JSON(http.StatusOK, gin.H{"message": "logged out"})
 }
+
+// Profile returns the currently authenticated user's profile
+func (h *AuthHandler) Profile(c *gin.Context) {
+    userIDVal, exists := c.Get("userID")
+    if !exists {
+        c.JSON(http.StatusUnauthorized, dto.ErrorResponse{Error: "user not authenticated"})
+        return
+    }
+    userID, ok := userIDVal.(int)
+    if !ok {
+        c.JSON(http.StatusUnauthorized, dto.ErrorResponse{Error: "invalid user id in context"})
+        return
+    }
+    // Fetch user from DB
+    user, err := h.userService.GetUserByID(userID)
+    if err != nil {
+        c.JSON(http.StatusInternalServerError, dto.ErrorResponse{Error: "failed to fetch user"})
+        return
+	}
+    // Return user profile 
+    response := dto.SignupResponse{
+        ID:        user.ID,
+        FirstName: user.FirstName,
+        LastName:  user.LastName,
+        Email:     user.Email,
+        City:      user.City,
+        Country:   user.Country,
+    }
+
+    c.JSON(http.StatusOK, response)
+}
+

@@ -118,3 +118,19 @@ func (s *Service) Login(req dto.LoginRequest) (*dto.LoginResponse, error) {
 
 	return response, nil
 }
+
+func (s *Service) GetUserByID(id int) (*dto.UserResponse, error) {
+	user, err := s.repo.GetUserByID(id)
+	if err != nil {
+		return nil, err
+	}
+	return &dto.UserResponse{
+		ID:        user.ID,
+		FirstName: user.FirstName,
+		LastName:  user.LastName,
+		Email:     user.Email,
+		City:      user.City,
+		Country:   user.Country,
+	}, nil
+}
+

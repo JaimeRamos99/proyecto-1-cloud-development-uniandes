@@ -284,6 +284,7 @@ const App = () => {
       try {
         if (isLogin) {
           await apiService.login(formData.email, formData.password);
+          apiService.token = localStorage.getItem('access_token');
           const profile = await apiService.getProfile();
           setUser(profile);
           setCurrentView('dashboard');

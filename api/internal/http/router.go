@@ -45,6 +45,7 @@ func NewRouter(cfg *config.Config, db *database.DB) *gin.Engine {
 			auth.POST("/signup", authHandler.Signup)
 			auth.POST("/login", authHandler.Login)
 			auth.POST("/logout", authHandler.Logout)
+			auth.GET("/profile", authMiddleware, authHandler.Profile)
 		}
 
 		videos := api.Group("/videos")

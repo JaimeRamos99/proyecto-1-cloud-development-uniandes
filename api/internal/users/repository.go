@@ -70,3 +70,22 @@ func (r *Repository) GetUserByEmail(email string) (*User, error) {
 
 	return &user, nil
 }
+
+// GetUserByID retrieves a user by their ID
+func (r *Repository) GetUserByID(id int) (*User, error) {
+	query := `
+		SELECT id, first_name, last_name, email, password_hash, city, country
+		FROM users
+		WHERE id = $1`
+
+	var user User
+	err := r.db.QueryRow(query, id).Scan(
+		&user.ID, &user.FirstName, &user.LastName, &user.Email,
+		&user.PasswordHash, &user.City, &user.Country,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get user by id: %w", err)
+	}
+
+	return &user, nil
+}
