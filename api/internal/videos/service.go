@@ -283,3 +283,46 @@ func (s *Service) GetPublicVideos() ([]*dto.PublicVideoResponse, error) {
 
 	return responses, nil
 }
+
+func (s *Service) GetVideoForPublicStream(videoID int) (*dto.PublicVideoResponse, string, string, error) {
+    // Get video (userID = 0 para ignorar validación de usuario)
+    video, err := s.repo.GetVideoByID(videoID, 0)
+    if err != nil {
+        return nil, "", "", err
+    }
+
+    // Check if video is public
+    if !video.IsPublic {
+        return nil, "", "", fmt.Errorf("video is not public")
+    }
+
+    // Generate presigned URLs
+    originalS3Key := fmt.Sprintf("original/%d.mp4", videoID)
+    processedS3Key := fmt.Sprintf("processed/%d.mp4", videoID)
+
+    originalURL, err := s.storageManager.GetSignedUrl(originalS3Key)
+    if err != nil {
+        return nil, "", "", fmt.Errorf("failed to generate original video URL: %w", err)
+    }
+
+    processedURL, err := s.storageManager.GetSignedUrl(processedS3Key)
+    if err != nil {
+        return nil, "", "", fmt.Errorf("failed to generate processed video URL: %w", err)
+    }
+
+    // Build DTO response
+    response := &dto.PublicVideoResponse{
+        VideoID:      video.ID,
+        Title:        video.Title,
+        Status:       video.Status,
+        IsPublic:     video.IsPublic,
+        UploadedAt:   video.UploadedAt,
+        ProcessedAt:  video.ProcessedAt,
+        ProcessedURL: processedURL,
+        Votes:        0,
+    }
+
+    return response, originalURL, processedURL, nil
+}
+
+

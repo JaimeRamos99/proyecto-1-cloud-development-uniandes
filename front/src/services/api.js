@@ -208,12 +208,12 @@ class ApiService {
 
     getVideoStreamUrl(videoId) {
         // Your Go backend should have an endpoint like this for streaming
-        return `${this.baseURL}/api/videos/${videoId}/stream`;
+        return `${this.baseURL}/api/public/videos/${videoId}/stream`;
     }
 
     getVideoUrl(video) {
         // If your backend returns direct URLs in the video object
-        return video.processed_url || video.original_url || this.getVideoStreamUrl(video.video_id);
+        return this.getVideoStreamUrl(video.video_id);
     }
 
     async findServerPort() {
