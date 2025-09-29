@@ -27,7 +27,7 @@ type LoginRequest struct {
 	Password string `json:"password" binding:"required"`
 }
 
-// UserResponse is the representation of a user 
+// UserResponse is the representation of a user
 type UserResponse struct {
 	ID        int    `json:"id"`
 	FirstName string `json:"first_name"`
@@ -37,10 +37,9 @@ type UserResponse struct {
 	Country   string `json:"country"`
 }
 
-
 // LoginResponse represents the response for successful login
 type LoginResponse struct {
-	Token string `json:"token"`
+	Token string       `json:"token"`
 	User  UserResponse `json:"user"`
 }
 

@@ -133,4 +133,3 @@ func (s *Service) GetUserByID(id int) (*dto.UserResponse, error) {
 		Country:   user.Country,
 	}, nil
 }
-

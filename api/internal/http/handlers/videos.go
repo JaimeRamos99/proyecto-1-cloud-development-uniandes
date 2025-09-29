@@ -1,8 +1,8 @@
 package handlers
 
 import (
-	"log"
 	"io"
+	"log"
 	"net/http"
 	"strconv"
 	"strings"
@@ -316,38 +316,37 @@ func (h *VideoHandler) GetPublicVideos(c *gin.Context) {
 
 // StreamVideo devuelve el video procesado de forma reproducible en el navegador
 func (h *VideoHandler) StreamVideo(c *gin.Context) {
-    videoIDStr := c.Param("video_id")
-    videoID, err := strconv.Atoi(videoIDStr)
-    if err != nil {
-        c.JSON(http.StatusBadRequest, dto.ErrorResponse{Error: "Invalid video ID"})
-        return
-    }
+	videoIDStr := c.Param("video_id")
+	videoID, err := strconv.Atoi(videoIDStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, dto.ErrorResponse{Error: "Invalid video ID"})
+		return
+	}
 
-    // Obtener el video por ID y validar que sea público
-    video, _, processedURL, err := h.videoService.GetVideoForPublicStream(videoID)
-    if err != nil || video == nil {
-        c.JSON(http.StatusNotFound, dto.ErrorResponse{Error: "Video not found or not public"})
-        return
-    }
+	// Obtener el video por ID y validar que sea público
+	video, _, processedURL, err := h.videoService.GetVideoForPublicStream(videoID)
+	if err != nil || video == nil {
+		c.JSON(http.StatusNotFound, dto.ErrorResponse{Error: "Video not found or not public"})
+		return
+	}
 
-    resp, err := http.Get(processedURL)
-    if err != nil {
-        c.JSON(http.StatusInternalServerError, dto.ErrorResponse{Error: "Failed to fetch video"})
-        return
-    }
-    defer resp.Body.Close()
+	resp, err := http.Get(processedURL)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, dto.ErrorResponse{Error: "Failed to fetch video"})
+		return
+	}
+	defer resp.Body.Close()
 
-    if cl := resp.Header.Get("Content-Length"); cl != "" {
-        c.Header("Content-Length", cl)
-    }
+	if cl := resp.Header.Get("Content-Length"); cl != "" {
+		c.Header("Content-Length", cl)
+	}
 
-    c.Header("Content-Type", "video/mp4")
-    c.Header("Content-Disposition", "inline")
-    c.Status(http.StatusOK)
+	c.Header("Content-Type", "video/mp4")
+	c.Header("Content-Disposition", "inline")
+	c.Status(http.StatusOK)
 
-    _, copyErr := io.Copy(c.Writer, resp.Body)
-    if copyErr != nil {
-        log.Printf("Error streaming video %d: %v", videoID, copyErr)
-    }
+	_, copyErr := io.Copy(c.Writer, resp.Body)
+	if copyErr != nil {
+		log.Printf("Error streaming video %d: %v", videoID, copyErr)
+	}
 }
-
