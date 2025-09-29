@@ -8,8 +8,6 @@ class ApiService {
 
     async request(endpoint, options = {}) {
         const url = `${this.baseURL}${endpoint}`;
-        console.log('🔥 API Request:', url, options);
-    
         const config = {
             headers: {
                 'Content-Type': 'application/json',
@@ -18,9 +16,12 @@ class ApiService {
             ...options,
         };
 
-        if (this.token) {
-            config.headers.Authorization = `Bearer ${this.token}`;
+        const token = this.token || localStorage.getItem('access_token');
+        if (token) {
+            config.headers.Authorization = `Bearer ${token}`;
         }
+        console.log('🔑 Using token:', token);  
+        console.log('📡 Headers:', config.headers);
 
         try {
             const response = await fetch(url, config);
@@ -207,12 +208,12 @@ class ApiService {
 
     getVideoStreamUrl(videoId) {
         // Your Go backend should have an endpoint like this for streaming
-        return `${this.baseURL}/api/videos/${videoId}/stream`;
+        return `${this.baseURL}/api/public/videos/${videoId}/stream`;
     }
 
     getVideoUrl(video) {
         // If your backend returns direct URLs in the video object
-        return video.processed_url || video.original_url || this.getVideoStreamUrl(video.video_id);
+        return this.getVideoStreamUrl(video.video_id);
     }
 
     async findServerPort() {

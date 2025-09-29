@@ -284,6 +284,7 @@ const App = () => {
       try {
         if (isLogin) {
           await apiService.login(formData.email, formData.password);
+          apiService.token = localStorage.getItem('access_token');
           const profile = await apiService.getProfile();
           setUser(profile);
           setCurrentView('dashboard');
@@ -1643,19 +1644,11 @@ const App = () => {
           <div className="bg-white rounded-2xl shadow-xl overflow-hidden">
             {/* Video Container */}
             <div className="relative bg-black">
-              <video
-                className="w-full h-auto max-h-[70vh] object-contain"
-                controls
-                autoPlay
-                poster="/api/placeholder/800/450"
-              >
-                <source 
-                  src={video.video_url || `/api/videos/${video.video_id}/stream`} 
-                  type="video/mp4" 
-                />
-                  Tu navegador no soporta el elemento de video.
-                
+              <video controls autoPlay className="w-full h-auto max-h-[70vh] object-contain">
+                <source src={apiService.getVideoUrl(video)} type="video/mp4" />
+                Tu navegador no soporta el elemento de video.
               </video>
+
             </div>
 
             {/* Video Info */}

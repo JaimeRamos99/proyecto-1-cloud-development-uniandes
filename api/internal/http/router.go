@@ -45,6 +45,7 @@ func NewRouter(cfg *config.Config, db *database.DB) *gin.Engine {
 			auth.POST("/signup", authHandler.Signup)
 			auth.POST("/login", authHandler.Login)
 			auth.POST("/logout", authHandler.Logout)
+			auth.GET("/profile", authMiddleware, authHandler.Profile)
 		}
 
 		videos := api.Group("/videos")
@@ -62,6 +63,7 @@ func NewRouter(cfg *config.Config, db *database.DB) *gin.Engine {
 			// Vote endpoints require authentication
 			public.POST("/videos/:video_id/vote", authMiddleware, voteHandler.VoteForVideo)
 			public.DELETE("/videos/:video_id/vote", authMiddleware, voteHandler.UnvoteForVideo)
+			public.GET("/videos/:video_id/stream", videoHandler.StreamVideo)
 
 			// Rankings endpoints (no authentication required)
 			public.GET("/rankings", rankingHandler.GetPlayerRankings)

@@ -38,19 +38,25 @@ func (r *Repository) CreateVideo(video *Video) (*Video, error) {
 // GetVideoByID retrieves a video by its ID and user ID (ensures ownership)
 func (r *Repository) GetVideoByID(videoID int, userID int) (*Video, error) {
 	query := `
-		SELECT id, title, status, is_public, uploaded_at, processed_at, deleted_at, user_id
-		FROM videos 
-		WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL`
+        SELECT id, title, status, is_public, uploaded_at, processed_at, deleted_at, user_id
+        FROM videos 
+        WHERE id = $1 AND deleted_at IS NULL`
+
+	args := []interface{}{videoID}
+
+	if userID > 0 {
+		query += " AND user_id = $2"
+		args = append(args, userID)
+	}
 
 	var video Video
-	err := r.db.QueryRow(query, videoID, userID).Scan(
+	err := r.db.QueryRow(query, args...).Scan(
 		&video.ID, &video.Title, &video.Status, &video.IsPublic,
 		&video.UploadedAt, &video.ProcessedAt,
 		&video.DeletedAt, &video.UserID,
 	)
-
 	if err != nil {
-		return nil, fmt.Errorf("failed to get video by ID %d for user %d: %w", videoID, userID, err)
+		return nil, fmt.Errorf("failed to get video by ID %d: %w", videoID, err)
 	}
 
 	return &video, nil

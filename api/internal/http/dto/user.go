@@ -27,17 +27,20 @@ type LoginRequest struct {
 	Password string `json:"password" binding:"required"`
 }
 
+// UserResponse is the representation of a user
+type UserResponse struct {
+	ID        int    `json:"id"`
+	FirstName string `json:"first_name"`
+	LastName  string `json:"last_name"`
+	Email     string `json:"email"`
+	City      string `json:"city"`
+	Country   string `json:"country"`
+}
+
 // LoginResponse represents the response for successful login
 type LoginResponse struct {
-	Token string `json:"token"`
-	User  struct {
-		ID        int    `json:"id"`
-		FirstName string `json:"first_name"`
-		LastName  string `json:"last_name"`
-		Email     string `json:"email"`
-		City      string `json:"city"`
-		Country   string `json:"country"`
-	} `json:"user"`
+	Token string       `json:"token"`
+	User  UserResponse `json:"user"`
 }
 
 // ErrorResponse represents error response
