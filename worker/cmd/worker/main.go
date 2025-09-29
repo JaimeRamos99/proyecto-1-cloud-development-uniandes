@@ -6,13 +6,14 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"worker/internal"
 	"worker/internal/ObjectStorage"
 	"worker/internal/ObjectStorage/providers"
 	"worker/internal/config"
 	"worker/internal/database"
-	messagingProviders "worker/internal/messaging/providers"
+	"worker/internal/jobs"
 	"worker/internal/videos"
 )
 
@@ -37,46 +38,28 @@ func main() {
 		}
 	}()
 
-	// Initialize S3 storage provider
-	s3Provider, err := providers.NewS3Provider(&providers.S3Config{
-		AccessKeyID:     cfg.AWS.AccessKeyID,
-		SecretAccessKey: cfg.AWS.SecretAccessKey,
-		Region:          cfg.AWS.Region,
-		BucketName:      cfg.AWS.S3BucketName,
-		EndpointURL:     cfg.AWS.EndpointURL,
+	// Initialize NFS storage provider instead of S3
+	nfsProvider, err := providers.NewNFSProvider(&providers.NFSConfig{
+		BasePath:   cfg.NFS.BasePath,   // e.g., "/app/shared-files"
+		BaseURL:    cfg.NFS.BaseURL,    // e.g., "http://your-web-server.com"
+		ServerIP:   cfg.NFS.ServerIP,   // NFS server private IP
+		ServerPath: cfg.NFS.ServerPath, // Server-side path
 	})
 	if err != nil {
-		log.Fatalf("Failed to initialize S3 provider: %v", err)
+		log.Fatalf("Failed to initialize NFS provider: %v", err)
 	}
 
 	// Initialize file storage manager
-	storageManager := ObjectStorage.NewFileStorageManager(s3Provider)
+	storageManager := ObjectStorage.NewFileStorageManager(nfsProvider)
 
-	// Initialize SQS message queue
-	messageQueue, err := messagingProviders.NewSQSQueue(&cfg.AWS)
-	if err != nil {
-		log.Fatalf("Failed to initialize message queue: %v", err)
-	}
-
-	// Ensure message queue is closed on exit
-	defer func() {
-		if err := messageQueue.Close(); err != nil {
-			log.Printf("Error closing message queue: %v", err)
-		}
-	}()
+	// Initialize job queue instead of SQS
+	jobQueue := jobs.NewJobQueue(db, 5*time.Second) // Poll every 5 seconds
 
 	// Initialize video repository
 	videoRepo := videos.NewRepository(db)
 
 	// Initialize worker service
-	workerService := internal.NewWorkerService(messageQueue, videoRepo, storageManager, &cfg.Retry)
-
-	// Ensure worker service is closed on exit
-	defer func() {
-		if err := workerService.Close(); err != nil {
-			log.Printf("Error closing worker service: %v", err)
-		}
-	}()
+	workerService := internal.NewWorkerService(jobQueue, videoRepo, storageManager, &cfg.Retry)
 
 	// Create context for graceful shutdown
 	ctx, cancel := context.WithCancel(context.Background())
@@ -88,10 +71,35 @@ func main() {
 
 	// Start worker in a goroutine
 	go func() {
-		log.Println("Starting worker message processing...")
-		if err := workerService.ProcessMessages(ctx); err != nil {
+		log.Println("Starting worker job processing...")
+		
+		// Define job handler
+		jobHandler := func(job *jobs.VideoJob) error {
+			return workerService.ProcessVideoJob(ctx, job)
+		}
+
+		// Start polling for jobs
+		if err := jobQueue.PollForJobs(ctx, jobHandler); err != nil {
 			if err != context.Canceled {
 				log.Printf("Worker stopped with error: %v", err)
+			}
+		}
+	}()
+
+	// Start cleanup routine
+	go func() {
+		cleanupTicker := time.NewTicker(1 * time.Hour)
+		defer cleanupTicker.Stop()
+
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-cleanupTicker.C:
+				// Cleanup jobs older than 24 hours
+				if err := jobQueue.CleanupOldJobs(ctx, 24*time.Hour); err != nil {
+					log.Printf("Error cleaning up old jobs: %v", err)
+				}
 			}
 		}
 	}()

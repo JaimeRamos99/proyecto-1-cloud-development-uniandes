@@ -40,6 +40,7 @@ COPY assets/ /app/assets/
 # Create directories with proper permissions (before switching user)
 RUN mkdir -p /tmp && chmod 1777 /tmp
 RUN mkdir -p /app/assets && chmod 755 /app/assets
+RUN mkdir -p /app/shared-files && chmod 755 /app/shared-files
 
 # Create ANB watermark using ImageMagick only if watermark.png doesn't exist
 RUN if [ ! -f /app/assets/watermark.png ]; then \
@@ -54,30 +55,13 @@ RUN if [ ! -f /app/assets/watermark.png ]; then \
         echo "Using existing watermark.png"; \
     fi
 
-# Create ANB bumpers (intro/outro) if they don't exist
-RUN if [ ! -f /app/assets/intro.mp4 ] || [ ! -f /app/assets/outro.mp4 ]; then \
-    if [ -f /app/assets/create_bumpers.sh ]; then \
-        cd /app/assets && sh create_bumpers.sh || \
-        echo "Warning: Could not create bumpers"; \
-    fi; \
-    else \
-        echo "Using existing bumpers"; \
-    fi
-
 # Change ownership to worker user  
-RUN chown -R worker:worker ./worker /app/assets
+RUN chown -R worker:worker ./worker /app/assets /app/shared-files
 # Ensure /tmp is writable by worker user (standard tmp directory permissions)
 RUN chmod 1777 /tmp
 
 # Switch to non-root user
 USER worker
-
-# Expose any necessary ports (worker doesn't need HTTP port)
-# EXPOSE 8080
-
-# Health check (optional - worker doesn't have HTTP endpoints)
-# HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-#   CMD ps aux | grep -q '[w]orker' || exit 1
 
 # Run the application
 CMD ["./worker"]

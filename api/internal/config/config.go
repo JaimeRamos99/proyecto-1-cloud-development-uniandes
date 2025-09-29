@@ -13,6 +13,7 @@ type Config struct {
 	App      AppConfig
 	Database DatabaseConfig
 	AWS      AWSConfig
+	NFS      NFSConfig
 }
 
 type ServerConfig struct {
@@ -52,6 +53,13 @@ type AWSConfig struct {
 	EndpointURL     string // For LocalStack
 	S3BucketName    string
 	SQSQueueName    string
+}
+
+type NFSConfig struct {
+	BasePath   string `env:"NFS_BASE_PATH" envDefault:"/app/shared-files"`
+	BaseURL    string `env:"NFS_BASE_URL" envDefault:""`
+	ServerIP   string `env:"NFS_SERVER_IP" envDefault:""`
+	ServerPath string `env:"NFS_SERVER_PATH" envDefault:"/nfs-export/shared-files"`
 }
 
 // Load reads configuration from environment variables with sensible defaults
