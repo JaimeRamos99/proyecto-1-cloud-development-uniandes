@@ -10,7 +10,7 @@ type VideoUploadResponse struct {
 	IsPublic   bool      `json:"is_public"`
 	UploadedAt time.Time `json:"uploaded_at"`
 	UserID     int       `json:"user_id"`
-	S3Key      string    `json:"s3_key,omitempty"` // S3 storage key
+	FilePath   string    `json:"file_path"` 
 }
 
 // VideoResponse represents the response for video details

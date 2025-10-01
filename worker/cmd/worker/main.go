@@ -38,12 +38,10 @@ func main() {
 		}
 	}()
 
-	// Initialize NFS storage provider instead of S3
+	// Initialize NFS storage provider (CHANGED FROM S3)
 	nfsProvider, err := providers.NewNFSProvider(&providers.NFSConfig{
-		BasePath:   cfg.NFS.BasePath,   // e.g., "/app/shared-files"
-		BaseURL:    cfg.NFS.BaseURL,    // e.g., "http://your-web-server.com"
-		ServerIP:   cfg.NFS.ServerIP,   // NFS server private IP
-		ServerPath: cfg.NFS.ServerPath, // Server-side path
+		BasePath: "/app/shared-files",
+		BaseURL:  cfg.NFS.BaseURL, // Add this to your config
 	})
 	if err != nil {
 		log.Fatalf("Failed to initialize NFS provider: %v", err)
@@ -52,14 +50,21 @@ func main() {
 	// Initialize file storage manager
 	storageManager := ObjectStorage.NewFileStorageManager(nfsProvider)
 
-	// Initialize job queue instead of SQS
-	jobQueue := jobs.NewJobQueue(db, 5*time.Second) // Poll every 5 seconds
+	// Initialize job queue (CHANGED FROM SQS)
+	jobQueue := jobs.NewJobQueue(db, 5*time.Second)
 
 	// Initialize video repository
 	videoRepo := videos.NewRepository(db)
 
 	// Initialize worker service
 	workerService := internal.NewWorkerService(jobQueue, videoRepo, storageManager, &cfg.Retry)
+
+	// Ensure worker service is closed on exit
+	defer func() {
+		if err := workerService.Close(); err != nil {
+			log.Printf("Error closing worker service: %v", err)
+		}
+	}()
 
 	// Create context for graceful shutdown
 	ctx, cancel := context.WithCancel(context.Background())
@@ -71,35 +76,10 @@ func main() {
 
 	// Start worker in a goroutine
 	go func() {
-		log.Println("Starting worker job processing...")
-		
-		// Define job handler
-		jobHandler := func(job *jobs.VideoJob) error {
-			return workerService.ProcessVideoJob(ctx, job)
-		}
-
-		// Start polling for jobs
-		if err := jobQueue.PollForJobs(ctx, jobHandler); err != nil {
+		log.Println("Starting worker message processing...")
+		if err := workerService.ProcessMessages(ctx); err != nil {
 			if err != context.Canceled {
 				log.Printf("Worker stopped with error: %v", err)
-			}
-		}
-	}()
-
-	// Start cleanup routine
-	go func() {
-		cleanupTicker := time.NewTicker(1 * time.Hour)
-		defer cleanupTicker.Stop()
-
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case <-cleanupTicker.C:
-				// Cleanup jobs older than 24 hours
-				if err := jobQueue.CleanupOldJobs(ctx, 24*time.Hour); err != nil {
-					log.Printf("Error cleaning up old jobs: %v", err)
-				}
 			}
 		}
 	}()

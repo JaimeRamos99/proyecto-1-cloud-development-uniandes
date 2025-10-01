@@ -11,8 +11,6 @@ import (
 	"proyecto1/root/internal/config"
 	"proyecto1/root/internal/database"
 	"proyecto1/root/internal/http/dto"
-	"proyecto1/root/internal/messaging"
-	messagingProviders "proyecto1/root/internal/messaging/providers"
 	"proyecto1/root/internal/videos"
 	"proyecto1/root/internal/votes"
 
@@ -29,12 +27,9 @@ func NewVideoHandler(db *database.DB, cfg *config.Config) *VideoHandler {
 	// Create storage manager based on configuration
 	storageManager := createStorageManager(cfg)
 
-	// Create message queue service
-	messageQueue := createMessageQueue(cfg)
-
-	// Create repository and service with storage manager and message queue
+	// Create repository and service with storage manager and database (NO MORE MESSAGE QUEUE)
 	repo := videos.NewRepository(db)
-	service := videos.NewService(repo, storageManager, messageQueue)
+	service := videos.NewService(repo, storageManager, db) // Pass db instead of messageQueue
 
 	// Create vote service
 	voteRepo := votes.NewRepository(db)
@@ -46,36 +41,21 @@ func NewVideoHandler(db *database.DB, cfg *config.Config) *VideoHandler {
 	}
 }
 
-// createStorageManager creates S3 storage manager based on configuration
+// createStorageManager creates NFS storage manager based on configuration
 func createStorageManager(cfg *config.Config) *ObjectStorage.FileStorageManager {
-	// S3/LocalStack configuration
-	s3Config := &providers.S3Config{
-		AccessKeyID:     cfg.AWS.AccessKeyID,
-		SecretAccessKey: cfg.AWS.SecretAccessKey,
-		Region:          cfg.AWS.Region,
-		BucketName:      cfg.AWS.S3BucketName,
-		EndpointURL:     cfg.AWS.EndpointURL, // LocalStack URL in development, empty for production AWS
+	// NFS configuration
+	nfsConfig := &providers.NFSConfig{
+		BasePath: cfg.NFS.BasePath, // e.g., "/app/shared-files"
+		BaseURL:  cfg.NFS.BaseURL,  // e.g., "http://your-domain.com"
 	}
 
-	// Create S3 provider (works with both LocalStack and real AWS)
-	s3Provider, err := providers.NewS3Provider(s3Config)
+	// Create NFS provider
+	nfsProvider, err := providers.NewNFSProvider(nfsConfig)
 	if err != nil {
-		panic("Failed to create S3 storage provider: " + err.Error())
+		panic("Failed to create NFS storage provider: " + err.Error())
 	}
 
-	return ObjectStorage.NewFileStorageManager(s3Provider)
-}
-
-// createMessageQueue creates message queue service based on configuration
-func createMessageQueue(cfg *config.Config) messaging.MessageQueue {
-	// For now, we only have SQS implementation
-	// In the future, you can add logic to choose between different providers
-	// based on configuration (e.g., cfg.Messaging.Provider)
-	messageQueue, err := messagingProviders.NewSQSQueue(&cfg.AWS)
-	if err != nil {
-		panic("Failed to create message queue service: " + err.Error())
-	}
-	return messageQueue
+	return ObjectStorage.NewFileStorageManager(nfsProvider)
 }
 
 // UploadVideo handles video upload with authentication and validation

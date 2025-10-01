@@ -1,40 +1,39 @@
 package videos
 
 import (
-	"context"
 	"fmt"
 	"io"
 	"mime/multipart"
 	"time"
 
 	"proyecto1/root/internal/ObjectStorage"
+	"proyecto1/root/internal/database"
 	"proyecto1/root/internal/http/dto"
-	"proyecto1/root/internal/messaging"
 )
 
 type Service struct {
 	repo           *Repository
 	validator      *FFProbeValidator
 	storageManager *ObjectStorage.FileStorageManager
-	messageQueue   messaging.MessageQueue
+	db             *database.DB // CHANGED: removed messageQueue, added db
 }
 
-func NewService(repo *Repository, storageManager *ObjectStorage.FileStorageManager, messageQueue messaging.MessageQueue) *Service {
-	validator := NewFFProbeValidator("/tmp") // Use /tmp for temp files in container
+func NewService(repo *Repository, storageManager *ObjectStorage.FileStorageManager, db *database.DB) *Service {
+	validator := NewFFProbeValidator("/tmp")
 	return &Service{
 		repo:           repo,
 		validator:      validator,
 		storageManager: storageManager,
-		messageQueue:   messageQueue,
+		db:             db, // CHANGED
 	}
 }
 
 // VideoMetadata represents video file metadata
 type VideoMetadata struct {
-	Duration float64 // in seconds
+	Duration float64
 	Width    int
 	Height   int
-	Size     int64 // file size in bytes
+	Size     int64
 	Format   string
 }
 
@@ -52,8 +51,8 @@ func (s *Service) UploadVideo(file *multipart.FileHeader, title string, isPublic
 	// Create video record in database with metadata
 	video := &Video{
 		Title:    title,
-		Status:   StatusUploaded, // Set initial status
-		IsPublic: isPublic,       // Set visibility
+		Status:   StatusUploaded,
+		IsPublic: isPublic,
 		UserID:   userID,
 	}
 
@@ -62,21 +61,35 @@ func (s *Service) UploadVideo(file *multipart.FileHeader, title string, isPublic
 		return nil, fmt.Errorf("failed to save video record: %w", err)
 	}
 
-	// Upload file to S3 using ObjectStorage
-	s3Key, err := s.uploadVideoToStorage(file, createdVideo.ID)
+	// Upload file to NFS storage (CHANGED: using NFS instead of S3)
+	filePath, err := s.uploadVideoToNFS(file, createdVideo.ID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to upload video to storage: %w", err)
 	}
 
-	// Send video processing message to message queue
-	err = s.sendVideoProcessingMessage(s3Key)
+	// Update video record with file path
+	_, err = s.db.Exec(
+		"UPDATE videos SET file_path = ? WHERE id = ?",
+		filePath,
+		createdVideo.ID,
+	)
 	if err != nil {
-		// Log the error but don't fail the upload - the video is already saved
-		// In production, you might want to implement retry logic or dead letter queue
-		fmt.Printf("Warning: Failed to send message for video %d (S3 key: %s): %v\n", createdVideo.ID, s3Key, err)
+		return nil, fmt.Errorf("failed to update video file path: %w", err)
 	}
 
-	// Return success response with S3 information
+	// Create job in database (CHANGED: database insert instead of SQS)
+	_, err = s.db.Exec(
+		"INSERT INTO video_jobs (video_id, file_path, status) VALUES (?, ?, ?)",
+		createdVideo.ID,
+		filePath,
+		"pending",
+	)
+	if err != nil {
+		// Log error but don't fail - video is already uploaded
+		fmt.Printf("Warning: Failed to create job for video %d: %v\n", createdVideo.ID, err)
+	}
+
+	// Return success response
 	response := &dto.VideoUploadResponse{
 		ID:         createdVideo.ID,
 		Title:      createdVideo.Title,
@@ -84,11 +97,40 @@ func (s *Service) UploadVideo(file *multipart.FileHeader, title string, isPublic
 		IsPublic:   createdVideo.IsPublic,
 		UploadedAt: createdVideo.UploadedAt,
 		UserID:     createdVideo.UserID,
-		S3Key:      s3Key, // Include S3 key in response
+		FilePath:   filePath, // CHANGED: FilePath instead of S3Key
 	}
 
 	return response, nil
 }
+
+// uploadVideoToNFS uploads video file to NFS storage (CHANGED from uploadVideoToStorage)
+func (s *Service) uploadVideoToNFS(file *multipart.FileHeader, videoID int) (string, error) {
+	// Open uploaded file
+	src, err := file.Open()
+	if err != nil {
+		return "", fmt.Errorf("failed to open uploaded file: %w", err)
+	}
+	defer src.Close()
+
+	// Read file contents
+	fileBytes, err := io.ReadAll(src)
+	if err != nil {
+		return "", fmt.Errorf("failed to read file: %w", err)
+	}
+
+	// Generate filename with video ID
+	filename := fmt.Sprintf("%d_%s", videoID, file.Filename)
+	
+	// Upload to NFS (storageManager handles NFS operations)
+	err = s.storageManager.UploadFile(fileBytes, filename)
+	if err != nil {
+		return "", fmt.Errorf("failed to upload to NFS: %w", err)
+	}
+
+	// Return the relative path (used for database and worker access)
+	return fmt.Sprintf("uploads/%s", filename), nil
+}
+
 
 // uploadVideoToStorage uploads a video file to S3 and returns the S3 key
 func (s *Service) uploadVideoToStorage(file *multipart.FileHeader, videoID int) (string, error) {
@@ -226,18 +268,18 @@ func (s *Service) GetVideoDownloadURL(s3Key string) (string, error) {
 }
 
 // sendVideoProcessingMessage sends a message to message queue for video processing
-func (s *Service) sendVideoProcessingMessage(s3Key string) error {
-	// Create simple video processing message with just the S3 key
-	message := &messaging.VideoProcessingMessage{
-		S3Key: s3Key,
-	}
+// func (s *Service) sendVideoProcessingMessage(s3Key string) error {
+// 	// Create simple video processing message with just the S3 key
+// 	message := &messaging.VideoProcessingMessage{
+// 		S3Key: s3Key,
+// 	}
 
-	// Send message to message queue with context timeout
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
+// 	// Send message to message queue with context timeout
+// 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+// 	defer cancel()
 
-	return s.messageQueue.SendMessage(ctx, message)
-}
+// 	return s.messageQueue.SendMessage(ctx, message)
+// }
 
 // CheckFFProbeInstallation verifies that FFprobe is properly installed
 func (s *Service) CheckFFProbeInstallation() error {
