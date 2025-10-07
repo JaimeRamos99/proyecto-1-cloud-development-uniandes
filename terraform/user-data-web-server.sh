@@ -74,10 +74,7 @@ services:
       - AWS_ENDPOINT_URL=
       - S3_BUCKET_NAME=${s3_bucket_name}
       - SQS_QUEUE_NAME=${sqs_queue_name}
-    ports:
-      - "8080:8080"
-    networks:
-      - proyecto1-network
+    network_mode: host
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/api/health"]
       interval: 30s
@@ -105,6 +102,8 @@ services:
     restart: unless-stopped
     ports:
       - "80:80"
+    volumes:
+      - ./nginx.aws.conf:/etc/nginx/nginx.conf:ro
     depends_on:
       - frontend
       - api
@@ -130,7 +129,13 @@ chown -R ec2-user:ec2-user /home/ec2-user/proyecto1
 # Login to ECR
 echo "Logging in to ECR..."
 ECR_REGISTRY=$(echo "${ecr_api_url}" | cut -d"/" -f1)
-aws ecr get-login-password --region ${aws_region} | docker login --username AWS --password-stdin $ECR_REGISTRY
+aws ecr get-login-password --region ${aws_region} | docker login --username AWS --password-stdin $ECR_REGISTRY || echo "ECR login failed, but continuing..."
+
+# Ensure AWS credentials are available for containers
+echo "Setting up AWS credentials for containers..."
+mkdir -p /home/ec2-user/.aws
+# The EC2 instance already has IAM role attached, so we just need to ensure the directory exists
+# The AWS SDK will automatically use the instance profile
 
 # Note: Images need to be built and pushed before this will work
 # The containers will be started manually after deployment
