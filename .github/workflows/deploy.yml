@@ -196,12 +196,17 @@ jobs:
             
             # Start new API container
             sudo docker run -d --name proyecto1-api-aws --restart unless-stopped \
-              -p 8080:8080 \
+              --network host \
               -e DB_HOST=${{ secrets.RDS_ENDPOINT }} \
+              -e DB_PORT=5432 \
+              -e DB_NAME=proyecto_1 \
+              -e DB_USER=postgres \
               -e DB_PASSWORD=${{ secrets.DB_PASSWORD }} \
+              -e DB_SSL_MODE=require \
               -e S3_BUCKET_NAME=${{ secrets.S3_BUCKET_NAME }} \
               -e SQS_QUEUE_NAME=${{ secrets.SQS_QUEUE_NAME }} \
               -e JWT_SECRET=${{ secrets.JWT_SECRET }} \
+              -e AWS_DEFAULT_REGION=us-east-1 \
               ${{ secrets.ECR_REGISTRY }}/${{ env.ECR_API_REPO }}:latest
             
             # Restart frontend container
@@ -209,8 +214,16 @@ jobs:
             sudo docker rm proyecto1-frontend-aws || true
             sudo docker pull ${{ secrets.ECR_REGISTRY }}/${{ env.ECR_FRONTEND_REPO }}:latest
             sudo docker run -d --name proyecto1-frontend-aws --restart unless-stopped \
-              -p 80:80 \
+              --network host \
               ${{ secrets.ECR_REGISTRY }}/${{ env.ECR_FRONTEND_REPO }}:latest
+            
+            # Restart nginx container
+            sudo docker stop proyecto1-nginx-aws || true
+            sudo docker rm proyecto1-nginx-aws || true
+            sudo docker run -d --name proyecto1-nginx-aws --restart unless-stopped \
+              --network host \
+              -v /home/ec2-user/proyecto1/nginx.aws.conf:/etc/nginx/nginx.conf:ro \
+              nginx:alpine
             
             # Show running containers
             sudo docker ps
@@ -232,10 +245,16 @@ jobs:
             
             # Start new worker container with fixed AWS credentials
             sudo docker run -d --name proyecto1-worker-aws --restart unless-stopped \
+              --network host \
               -e DB_HOST=${{ secrets.RDS_ENDPOINT }} \
+              -e DB_PORT=5432 \
+              -e DB_NAME=proyecto_1 \
+              -e DB_USER=postgres \
               -e DB_PASSWORD=${{ secrets.DB_PASSWORD }} \
+              -e DB_SSL_MODE=require \
               -e S3_BUCKET_NAME=${{ secrets.S3_BUCKET_NAME }} \
               -e SQS_QUEUE_NAME=${{ secrets.SQS_QUEUE_NAME }} \
+              -e AWS_DEFAULT_REGION=us-east-1 \
               ${{ secrets.ECR_REGISTRY }}/${{ env.ECR_WORKER_REPO }}:latest
             
             # Show running containers
@@ -245,8 +264,8 @@ jobs:
       - name: Health Check
         run: |
           sleep 30
-          echo "Checking API health..."
-          curl -f http://${{ secrets.WEB_SERVER_IP }}:8080/api/health || exit 1
+          echo "Checking API health through nginx..."
+          curl -f http://${{ secrets.WEB_SERVER_IP }}/api/health || exit 1
           echo "Checking Frontend..."
           curl -f http://${{ secrets.WEB_SERVER_IP }} || exit 1
           echo "✅ Deployment successful!"
