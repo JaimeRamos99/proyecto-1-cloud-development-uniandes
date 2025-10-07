@@ -85,12 +85,9 @@ services:
     image: ${ecr_frontend_url}:${ecr_image_tag}
     container_name: ${project_name}-frontend-aws
     restart: unless-stopped
-    expose:
-      - "80"
-    networks:
-      - proyecto1-network
+    network_mode: host
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost/health"]
+      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -100,24 +97,18 @@ services:
     image: nginx:alpine
     container_name: ${project_name}-nginx-aws
     restart: unless-stopped
-    ports:
-      - "80:80"
+    network_mode: host
     volumes:
       - ./nginx.aws.conf:/etc/nginx/nginx.conf:ro
     depends_on:
       - frontend
       - api
-    networks:
-      - proyecto1-network
     healthcheck:
       test: ["CMD", "wget", "-q", "--spider", "http://localhost/nginx-health"]
       interval: 30s
       timeout: 10s
       retries: 3
 
-networks:
-  proyecto1-network:
-    driver: bridge
 EOF
 
 # Create placeholder directories
