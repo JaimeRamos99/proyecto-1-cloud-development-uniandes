@@ -32,8 +32,16 @@ rm -rf aws awscliv2.zip
 
 # Install FFmpeg (required for video processing)
 echo "Installing FFmpeg..."
-dnf install -y https://mirrors.rpmfusion.org/free/el/rpmfusion-free-release-9.noarch.rpm
-dnf install -y ffmpeg
+# Try multiple methods to install FFmpeg
+if ! dnf install -y ffmpeg; then
+    echo "FFmpeg not available in default repos, trying alternative methods..."
+    # Install EPEL first
+    dnf install -y epel-release || echo "EPEL installation failed, continuing..."
+    # Try installing from RPM Fusion
+    dnf install -y https://mirrors.rpmfusion.org/free/el/rpmfusion-free-release-8.noarch.rpm || echo "RPM Fusion installation failed, continuing..."
+    # Try installing FFmpeg again
+    dnf install -y ffmpeg || echo "FFmpeg installation failed, but continuing with deployment..."
+fi
 
 # Create project directory
 echo "Creating project directory..."
@@ -63,7 +71,7 @@ chown -R ec2-user:ec2-user /home/ec2-user/proyecto1
 # Login to ECR
 echo "Logging in to ECR..."
 ECR_REGISTRY=$(echo "${ecr_worker_url}" | cut -d"/" -f1)
-aws ecr get-login-password --region ${aws_region} | docker login --username AWS --password-stdin $ECR_REGISTRY
+aws ecr get-login-password --region ${aws_region} | docker login --username AWS --password-stdin $ECR_REGISTRY || echo "ECR login failed, but continuing..."
 
 # Pull and run worker container
 echo "Pulling worker image..."
@@ -95,8 +103,8 @@ WantedBy=multi-user.target
 EOF
 
 # Enable and start the service (if image is available)
-systemctl daemon-reload
-systemctl enable ${project_name}-worker.service
+systemctl daemon-reload || echo "Failed to reload systemd, continuing..."
+systemctl enable ${project_name}-worker.service || echo "Failed to enable service, continuing..."
 
 # Try to start the service (will fail if image not pushed yet)
 systemctl start ${project_name}-worker.service || echo "Worker service will start once image is pushed"
