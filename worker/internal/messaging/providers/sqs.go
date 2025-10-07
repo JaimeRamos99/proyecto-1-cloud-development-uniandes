@@ -28,14 +28,16 @@ func NewSQSQueue(cfg *config.AWSConfig) (*SQSQueue, error) {
 	// Add region
 	configOptions = append(configOptions, awsconfig.WithRegion(cfg.Region))
 
-	// Add credentials
-	configOptions = append(configOptions, awsconfig.WithCredentialsProvider(
-		credentials.NewStaticCredentialsProvider(
-			cfg.AccessKeyID,
-			cfg.SecretAccessKey,
-			"",
-		),
-	))
+	// Only add static credentials if they are provided, otherwise use default credential chain (instance profile)
+	if cfg.AccessKeyID != "" && cfg.SecretAccessKey != "" {
+		configOptions = append(configOptions, awsconfig.WithCredentialsProvider(
+			credentials.NewStaticCredentialsProvider(
+				cfg.AccessKeyID,
+				cfg.SecretAccessKey,
+				"",
+			),
+		))
+	}
 
 	// Load AWS config
 	awsConfig, err := awsconfig.LoadDefaultConfig(context.TODO(), configOptions...)

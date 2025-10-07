@@ -55,31 +55,43 @@ jobs:
           aws ecr get-login-password --region $AWS_REGION | \
             docker login --username AWS --password-stdin ${{ secrets.ECR_REGISTRY }}
 
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
       - name: Build and push API image
-        run: |
-          cd api
-          docker build -t ${{ secrets.ECR_REGISTRY }}/$ECR_API_REPO:${{ github.sha }} .
-          docker tag ${{ secrets.ECR_REGISTRY }}/$ECR_API_REPO:${{ github.sha }} \
-                     ${{ secrets.ECR_REGISTRY }}/$ECR_API_REPO:latest
-          docker push ${{ secrets.ECR_REGISTRY }}/$ECR_API_REPO:${{ github.sha }}
-          docker push ${{ secrets.ECR_REGISTRY }}/$ECR_API_REPO:latest
+        uses: docker/build-push-action@v5
+        with:
+          context: ./api
+          platforms: linux/amd64
+          push: true
+          tags: |
+            ${{ secrets.ECR_REGISTRY }}/$ECR_API_REPO:${{ github.sha }}
+            ${{ secrets.ECR_REGISTRY }}/$ECR_API_REPO:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
 
       - name: Build and push Worker image
-        run: |
-          cd worker
-          docker build -t ${{ secrets.ECR_REGISTRY }}/$ECR_WORKER_REPO:${{ github.sha }} .
-          docker tag ${{ secrets.ECR_REGISTRY }}/$ECR_WORKER_REPO:${{ github.sha }} \
-                     ${{ secrets.ECR_REGISTRY }}/$ECR_WORKER_REPO:latest
-          docker push ${{ secrets.ECR_REGISTRY }}/$ECR_WORKER_REPO:${{ github.sha }}
-          docker push ${{ secrets.ECR_REGISTRY }}/$ECR_WORKER_REPO:latest
+        uses: docker/build-push-action@v5
+        with:
+          context: ./worker
+          platforms: linux/amd64
+          push: true
+          tags: |
+            ${{ secrets.ECR_REGISTRY }}/$ECR_WORKER_REPO:${{ github.sha }}
+            ${{ secrets.ECR_REGISTRY }}/$ECR_WORKER_REPO:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
       - name: Build and push Frontend image
-        run: |
-          cd front
-          docker build -t ${{ secrets.ECR_REGISTRY }}/$ECR_FRONTEND_REPO:${{ github.sha }} .
-          docker tag ${{ secrets.ECR_REGISTRY }}/$ECR_FRONTEND_REPO:${{ github.sha }} \
-                     ${{ secrets.ECR_REGISTRY }}/$ECR_FRONTEND_REPO:latest
-          docker push ${{ secrets.ECR_REGISTRY }}/$ECR_FRONTEND_REPO:${{ github.sha }}
-          docker push ${{ secrets.ECR_REGISTRY }}/$ECR_FRONTEND_REPO:latest
+        uses: docker/build-push-action@v5
+        with:
+          context: ./front
+          platforms: linux/amd64
+          push: true
+          tags: |
+            ${{ secrets.ECR_REGISTRY }}/$ECR_FRONTEND_REPO:${{ github.sha }}
+            ${{ secrets.ECR_REGISTRY }}/$ECR_FRONTEND_REPO:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
 
   migrate-database:
     needs: build-and-push
@@ -169,20 +181,60 @@ jobs:
           scp -i key.pem -o StrictHostKeyChecking=no -r \
             front/dist/* ec2-user@${{ secrets.WEB_SERVER_IP }}:~/proyecto1/frontend-dist/
 
-          # Restart containers
+          # Restart API container with new image
           ssh -i key.pem -o StrictHostKeyChecking=no \
             ec2-user@${{ secrets.WEB_SERVER_IP }} << 'ENDSSH'
-            cd ~/proyecto1
-            docker-compose pull
-            docker-compose up -d
-            docker ps
+            # Stop and remove existing API container
+            sudo docker stop proyecto1-api-aws || true
+            sudo docker rm proyecto1-api-aws || true
+            
+            # Pull latest image
+            sudo docker pull ${{ secrets.ECR_REGISTRY }}/$ECR_API_REPO:latest
+            
+            # Start new API container
+            sudo docker run -d --name proyecto1-api-aws --restart unless-stopped \
+              -p 8080:8080 \
+              -e DB_HOST=${{ secrets.RDS_ENDPOINT }} \
+              -e DB_PASSWORD=${{ secrets.DB_PASSWORD }} \
+              -e S3_BUCKET_NAME=${{ secrets.S3_BUCKET_NAME }} \
+              -e SQS_QUEUE_NAME=${{ secrets.SQS_QUEUE_NAME }} \
+              -e JWT_SECRET=${{ secrets.JWT_SECRET }} \
+              ${{ secrets.ECR_REGISTRY }}/$ECR_API_REPO:latest
+            
+            # Restart frontend container
+            sudo docker stop proyecto1-frontend-aws || true
+            sudo docker rm proyecto1-frontend-aws || true
+            sudo docker pull ${{ secrets.ECR_REGISTRY }}/$ECR_FRONTEND_REPO:latest
+            sudo docker run -d --name proyecto1-frontend-aws --restart unless-stopped \
+              -p 80:80 \
+              ${{ secrets.ECR_REGISTRY }}/$ECR_FRONTEND_REPO:latest
+            
+            # Show running containers
+            sudo docker ps
           ENDSSH
 
       - name: Restart Worker
         run: |
           ssh -i key.pem -o StrictHostKeyChecking=no \
-            ec2-user@${{ secrets.WORKER_IP }} \
-            "sudo systemctl restart proyecto1-worker.service"
+            ec2-user@${{ secrets.WORKER_IP }} << 'ENDSSH'
+            # Stop and remove existing worker container
+            sudo docker stop proyecto1-worker-aws || true
+            sudo docker rm proyecto1-worker-aws || true
+            
+            # Pull latest image
+            sudo docker pull ${{ secrets.ECR_REGISTRY }}/$ECR_WORKER_REPO:latest
+            
+            # Start new worker container with fixed AWS credentials
+            sudo docker run -d --name proyecto1-worker-aws --restart unless-stopped \
+              -e DB_HOST=${{ secrets.RDS_ENDPOINT }} \
+              -e DB_PASSWORD=${{ secrets.DB_PASSWORD }} \
+              -e S3_BUCKET_NAME=${{ secrets.S3_BUCKET_NAME }} \
+              -e SQS_QUEUE_NAME=${{ secrets.SQS_QUEUE_NAME }} \
+              ${{ secrets.ECR_REGISTRY }}/$ECR_WORKER_REPO:latest
+            
+            # Show running containers
+            sudo docker ps
+          ENDSSH
 
       - name: Health Check
         run: |
