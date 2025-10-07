@@ -28,14 +28,18 @@ func NewSQSQueue(cfg *config.AWSConfig) (*SQSQueue, error) {
 	// Add region
 	configOptions = append(configOptions, awsconfig.WithRegion(cfg.Region))
 
-	// Add credentials
-	configOptions = append(configOptions, awsconfig.WithCredentialsProvider(
-		credentials.NewStaticCredentialsProvider(
-			cfg.AccessKeyID,
-			cfg.SecretAccessKey,
-			"",
-		),
-	))
+	// Only use static credentials if they are provided, otherwise use default credential chain
+	if cfg.AccessKeyID != "" && cfg.SecretAccessKey != "" {
+		configOptions = append(configOptions, awsconfig.WithCredentialsProvider(
+			credentials.NewStaticCredentialsProvider(
+				cfg.AccessKeyID,
+				cfg.SecretAccessKey,
+				"",
+			),
+		))
+	}
+	// If no static credentials provided, LoadDefaultConfig will automatically
+	// use the default credential chain (EC2 instance metadata, environment variables, etc.)
 
 	// Load AWS config
 	awsConfig, err := awsconfig.LoadDefaultConfig(context.TODO(), configOptions...)

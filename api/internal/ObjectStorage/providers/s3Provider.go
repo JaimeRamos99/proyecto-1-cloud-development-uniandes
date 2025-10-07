@@ -30,14 +30,25 @@ type S3Provider struct {
 // NewS3Provider creates a new S3 provider instance
 func NewS3Provider(cfg *S3Config) (*S3Provider, error) {
 	// Load base AWS configuration
-	awsConfig, err := config.LoadDefaultConfig(context.TODO(),
-		config.WithRegion(cfg.Region),
-		config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(
-			cfg.AccessKeyID,
-			cfg.SecretAccessKey,
-			"",
-		)),
-	)
+	var configOptions []func(*config.LoadOptions) error
+
+	// Add region
+	configOptions = append(configOptions, config.WithRegion(cfg.Region))
+
+	// Only use static credentials if they are provided, otherwise use default credential chain
+	if cfg.AccessKeyID != "" && cfg.SecretAccessKey != "" {
+		configOptions = append(configOptions, config.WithCredentialsProvider(
+			credentials.NewStaticCredentialsProvider(
+				cfg.AccessKeyID,
+				cfg.SecretAccessKey,
+				"",
+			),
+		))
+	}
+	// If no static credentials provided, LoadDefaultConfig will automatically
+	// use the default credential chain (EC2 instance metadata, environment variables, etc.)
+
+	awsConfig, err := config.LoadDefaultConfig(context.TODO(), configOptions...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load AWS config: %w", err)
 	}
