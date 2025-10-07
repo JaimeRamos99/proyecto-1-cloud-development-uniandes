@@ -84,16 +84,29 @@ services:
       timeout: 10s
       retries: 3
 
+  frontend:
+    image: ${ecr_frontend_url}:${ecr_image_tag}
+    container_name: ${project_name}-frontend-aws
+    restart: unless-stopped
+    expose:
+      - "80"
+    networks:
+      - proyecto1-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+
   nginx:
     image: nginx:alpine
     container_name: ${project_name}-nginx-aws
     restart: unless-stopped
     ports:
       - "80:80"
-    volumes:
-      - ./nginx.conf:/etc/nginx/nginx.conf:ro
-      - ./frontend-dist:/usr/share/nginx/html:ro
     depends_on:
+      - frontend
       - api
     networks:
       - proyecto1-network
@@ -111,49 +124,6 @@ EOF
 # Create placeholder directories
 mkdir -p frontend-dist
 
-# Create placeholder nginx config
-cat > nginx.conf << 'EOF'
-events {
-    worker_connections 1024;
-}
-
-http {
-    include /etc/nginx/mime.types;
-    default_type application/octet-stream;
-
-    upstream api {
-        server api:8080;
-    }
-
-    server {
-        listen 80;
-        server_name _;
-
-        # Frontend
-        location / {
-            root /usr/share/nginx/html;
-            try_files $uri $uri/ /index.html;
-        }
-
-        # API proxy
-        location /api/ {
-            proxy_pass http://api;
-            proxy_set_header Host $host;
-            proxy_set_header X-Real-IP $remote_addr;
-            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-            proxy_set_header X-Forwarded-Proto $scheme;
-        }
-
-        # Health check
-        location /nginx-health {
-            access_log off;
-            return 200 "OK\n";
-            add_header Content-Type text/plain;
-        }
-    }
-}
-EOF
-
 # Set proper permissions
 chown -R ec2-user:ec2-user /home/ec2-user/proyecto1
 
@@ -170,6 +140,6 @@ echo "Web Server Initialization Complete"
 echo "==================================="
 echo "Next steps:"
 echo "1. Push Docker images to ECR"
-echo "2. Copy nginx config and frontend files"
+echo "2. Copy nginx.config and frontend files"
 echo "3. Run: docker-compose up -d"
 

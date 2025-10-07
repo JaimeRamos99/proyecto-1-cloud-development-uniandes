@@ -26,38 +26,38 @@ FROM alpine:3.18
 RUN apk --no-cache add ca-certificates tzdata ffmpeg imagemagick
 
 # Set working directory
-WORKDIR /root/
+WORKDIR /app/
 
 # Create a non-root user
 RUN addgroup -S worker && adduser -S worker -G worker
 
 # Copy the built binary from builder stage
-COPY --from=builder /app/bin/worker ./
+COPY --from=builder /app/bin/worker ./worker
 
 # Copy assets directory for watermark
-COPY assets/ /app/assets/
+COPY assets/ ./assets/
 
 # Create directories with proper permissions (before switching user)
 RUN mkdir -p /tmp && chmod 1777 /tmp
-RUN mkdir -p /app/assets && chmod 755 /app/assets
+RUN mkdir -p ./assets && chmod 755 ./assets
 
 # Create ANB watermark using ImageMagick only if watermark.png doesn't exist
-RUN if [ ! -f /app/assets/watermark.png ]; then \
+RUN if [ ! -f ./assets/watermark.png ]; then \
     convert -size 200x50 xc:none \
         -font Arial-Bold -pointsize 24 \
         -fill 'rgba(255,255,255,0.8)' \
         -stroke 'rgba(0,0,0,0.5)' -strokewidth 1 \
         -gravity center -annotate 0 "ANB" \
-        /app/assets/watermark.png || \
+        ./assets/watermark.png || \
         echo "Warning: Could not create watermark with ImageMagick"; \
     else \
         echo "Using existing watermark.png"; \
     fi
 
 # Create ANB bumpers (intro/outro) if they don't exist
-RUN if [ ! -f /app/assets/intro.mp4 ] || [ ! -f /app/assets/outro.mp4 ]; then \
-    if [ -f /app/assets/create_bumpers.sh ]; then \
-        cd /app/assets && sh create_bumpers.sh || \
+RUN if [ ! -f ./assets/intro.mp4 ] || [ ! -f ./assets/outro.mp4 ]; then \
+    if [ -f ./assets/create_bumpers.sh ]; then \
+        cd ./assets && sh create_bumpers.sh || \
         echo "Warning: Could not create bumpers"; \
     fi; \
     else \
@@ -65,7 +65,7 @@ RUN if [ ! -f /app/assets/intro.mp4 ] || [ ! -f /app/assets/outro.mp4 ]; then \
     fi
 
 # Change ownership to worker user  
-RUN chown -R worker:worker ./worker /app/assets
+RUN chown -R worker:worker ./worker ./assets
 # Ensure /tmp is writable by worker user (standard tmp directory permissions)
 RUN chmod 1777 /tmp
 

@@ -71,6 +71,11 @@ output "ecr_worker_repository_url" {
   value       = aws_ecr_repository.worker.repository_url
 }
 
+output "ecr_frontend_repository_url" {
+  description = "ECR repository URL for Frontend"
+  value       = aws_ecr_repository.frontend.repository_url
+}
+
 # Security Groups
 output "web_server_security_group_id" {
   description = "Security group ID for web server"

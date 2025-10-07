@@ -10,6 +10,7 @@ env:
   AWS_REGION: us-east-1
   ECR_API_REPO: proyecto1-api
   ECR_WORKER_REPO: proyecto1-worker
+  ECR_FRONTEND_REPO: proyecto1-frontend
 
 jobs:
   test:
@@ -21,7 +22,7 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@v4
         with:
-          go-version: "1.21"
+          go-version: "1.23.12"
 
       - name: Run API tests
         run: |
@@ -71,6 +72,14 @@ jobs:
                      ${{ secrets.ECR_REGISTRY }}/$ECR_WORKER_REPO:latest
           docker push ${{ secrets.ECR_REGISTRY }}/$ECR_WORKER_REPO:${{ github.sha }}
           docker push ${{ secrets.ECR_REGISTRY }}/$ECR_WORKER_REPO:latest
+      - name: Build and push Frontend image
+        run: |
+          cd front
+          docker build -t ${{ secrets.ECR_REGISTRY }}/$ECR_FRONTEND_REPO:${{ github.sha }} .
+          docker tag ${{ secrets.ECR_REGISTRY }}/$ECR_FRONTEND_REPO:${{ github.sha }} \
+                     ${{ secrets.ECR_REGISTRY }}/$ECR_FRONTEND_REPO:latest
+          docker push ${{ secrets.ECR_REGISTRY }}/$ECR_FRONTEND_REPO:${{ github.sha }}
+          docker push ${{ secrets.ECR_REGISTRY }}/$ECR_FRONTEND_REPO:latest
 
   migrate-database:
     needs: build-and-push
@@ -154,7 +163,7 @@ jobs:
 
           # Copy nginx config
           scp -i key.pem -o StrictHostKeyChecking=no \
-            nginx/nginx.conf ec2-user@${{ secrets.WEB_SERVER_IP }}:~/proyecto1/
+            nginx/nginx.aws.conf ec2-user@${{ secrets.WEB_SERVER_IP }}:~/proyecto1/
 
           # Copy frontend files
           scp -i key.pem -o StrictHostKeyChecking=no -r \
