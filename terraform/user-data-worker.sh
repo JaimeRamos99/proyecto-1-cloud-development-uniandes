@@ -92,6 +92,7 @@ ExecStartPre=-/usr/bin/docker stop ${project_name}-worker-aws
 ExecStartPre=-/usr/bin/docker rm ${project_name}-worker-aws
 ExecStartPre=/usr/bin/docker pull ${ecr_worker_url}:${ecr_image_tag}
 ExecStart=/usr/bin/docker run --name ${project_name}-worker-aws \\
+  --network host \\
   --env-file /home/ec2-user/proyecto1/.env \\
   ${ecr_worker_url}:${ecr_image_tag}
 ExecStop=/usr/bin/docker stop ${project_name}-worker-aws
