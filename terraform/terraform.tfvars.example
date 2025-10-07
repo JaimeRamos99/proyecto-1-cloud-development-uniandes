@@ -1,0 +1,49 @@
+# Proyecto_1 - Terraform Variables Example
+# Copy this file to terraform.tfvars and fill in your values
+
+# General Configuration
+aws_region   = "us-east-1"
+environment  = "production"
+project_name = "proyecto1"
+
+# EC2 Configuration
+key_pair_name = "your-key-pair-name"  # REQUIRED: Your AWS key pair name
+
+# Instance types (adjust based on your needs)
+web_server_instance_type = "t3.small"   # 2 vCPU, 2 GiB RAM (~$15/month)
+worker_instance_type     = "c5.large"   # 2 vCPU, 4 GiB RAM (~$60/month)
+
+# Storage
+root_volume_size = 30  # GB
+
+# Security (IMPORTANT: Restrict SSH access)
+allowed_ssh_cidr = "0.0.0.0/0"  # Change to your IP: "YOUR_IP/32"
+
+# RDS Configuration
+db_instance_class           = "db.t3.micro"
+db_name                     = "proyecto_1"
+db_username                 = "postgres"
+db_password                 = "CHANGE_THIS_SECURE_PASSWORD_123!"  # REQUIRED: Use a strong password
+db_allocated_storage        = 20
+db_backup_retention_period  = 7
+
+# S3 Configuration
+s3_bucket_name = "proyecto1-videos-UNIQUE_SUFFIX"  # REQUIRED: Must be globally unique
+
+# SQS Configuration
+sqs_queue_name         = "proyecto1-video-processing"
+sqs_visibility_timeout = 900    # 15 minutes
+sqs_message_retention  = 1209600  # 14 days
+
+# Application Configuration
+jwt_secret = "CHANGE_THIS_TO_A_RANDOM_SECRET_KEY_AT_LEAST_32_CHARS"  # REQUIRED: Generate with: openssl rand -base64 32
+
+# Docker Configuration
+ecr_image_tag = "latest"
+
+# Additional Tags (optional)
+additional_tags = {
+  Owner = "your-name"
+  Team  = "your-team"
+}
+
