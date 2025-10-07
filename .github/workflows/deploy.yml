@@ -1,0 +1,192 @@
+name: Deploy to AWS
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+env:
+  AWS_REGION: us-east-1
+  ECR_API_REPO: proyecto1-api
+  ECR_WORKER_REPO: proyecto1-worker
+  ECR_FRONTEND_REPO: proyecto1-frontend
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: "1.23.12"
+
+      - name: Run API tests
+        run: |
+          cd api
+          go test -v ./...
+
+      - name: Run Worker tests
+        run: |
+          cd worker
+          go test -v ./...
+
+  build-and-push:
+    needs: test
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to ECR
+        run: |
+          aws ecr get-login-password --region $AWS_REGION | \
+            docker login --username AWS --password-stdin ${{ secrets.ECR_REGISTRY }}
+
+      - name: Build and push API image
+        run: |
+          cd api
+          docker build -t ${{ secrets.ECR_REGISTRY }}/$ECR_API_REPO:${{ github.sha }} .
+          docker tag ${{ secrets.ECR_REGISTRY }}/$ECR_API_REPO:${{ github.sha }} \
+                     ${{ secrets.ECR_REGISTRY }}/$ECR_API_REPO:latest
+          docker push ${{ secrets.ECR_REGISTRY }}/$ECR_API_REPO:${{ github.sha }}
+          docker push ${{ secrets.ECR_REGISTRY }}/$ECR_API_REPO:latest
+
+      - name: Build and push Worker image
+        run: |
+          cd worker
+          docker build -t ${{ secrets.ECR_REGISTRY }}/$ECR_WORKER_REPO:${{ github.sha }} .
+          docker tag ${{ secrets.ECR_REGISTRY }}/$ECR_WORKER_REPO:${{ github.sha }} \
+                     ${{ secrets.ECR_REGISTRY }}/$ECR_WORKER_REPO:latest
+          docker push ${{ secrets.ECR_REGISTRY }}/$ECR_WORKER_REPO:${{ github.sha }}
+          docker push ${{ secrets.ECR_REGISTRY }}/$ECR_WORKER_REPO:latest
+      - name: Build and push Frontend image
+        run: |
+          cd front
+          docker build -t ${{ secrets.ECR_REGISTRY }}/$ECR_FRONTEND_REPO:${{ github.sha }} .
+          docker tag ${{ secrets.ECR_REGISTRY }}/$ECR_FRONTEND_REPO:${{ github.sha }} \
+                     ${{ secrets.ECR_REGISTRY }}/$ECR_FRONTEND_REPO:latest
+          docker push ${{ secrets.ECR_REGISTRY }}/$ECR_FRONTEND_REPO:${{ github.sha }}
+          docker push ${{ secrets.ECR_REGISTRY }}/$ECR_FRONTEND_REPO:latest
+
+  migrate-database:
+    needs: build-and-push
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install PostgreSQL client
+        run: sudo apt-get install -y postgresql-client
+
+      - name: Run database migrations
+        env:
+          PGPASSWORD: ${{ secrets.DB_PASSWORD }}
+        run: |
+          # Run migrations (ignore errors for existing tables)
+          psql -h ${{ secrets.RDS_ENDPOINT }} -U postgres -d proyecto_1 -f db/001_create_user_table.sql || true
+          psql -h ${{ secrets.RDS_ENDPOINT }} -U postgres -d proyecto_1 -f db/002_create_video_table.sql || true
+          psql -h ${{ secrets.RDS_ENDPOINT }} -U postgres -d proyecto_1 -f db/003_add_is_public_to_videos.sql || true
+          psql -h ${{ secrets.RDS_ENDPOINT }} -U postgres -d proyecto_1 -f db/004_create_votes_table.sql || true
+          psql -h ${{ secrets.RDS_ENDPOINT }} -U postgres -d proyecto_1 -f db/005_create_player_rankings_view.sql || true
+
+  build-frontend:
+    needs: test
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "18"
+          cache: "npm"
+          cache-dependency-path: front/package-lock.json
+
+      - name: Install dependencies
+        run: |
+          cd front
+          npm ci
+
+      - name: Build frontend
+        run: |
+          cd front
+          npm run build
+
+      - name: Upload frontend artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-dist
+          path: front/dist
+
+  deploy:
+    needs: [build-and-push, migrate-database, build-frontend]
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download frontend artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: frontend-dist
+          path: front/dist
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Deploy to Web Server
+        run: |
+          # Create SSH key file
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > key.pem
+          chmod 400 key.pem
+
+          # Copy nginx config
+          scp -i key.pem -o StrictHostKeyChecking=no \
+            nginx/nginx.aws.conf ec2-user@${{ secrets.WEB_SERVER_IP }}:~/proyecto1/
+
+          # Copy frontend files
+          scp -i key.pem -o StrictHostKeyChecking=no -r \
+            front/dist/* ec2-user@${{ secrets.WEB_SERVER_IP }}:~/proyecto1/frontend-dist/
+
+          # Restart containers
+          ssh -i key.pem -o StrictHostKeyChecking=no \
+            ec2-user@${{ secrets.WEB_SERVER_IP }} << 'ENDSSH'
+            cd ~/proyecto1
+            docker-compose pull
+            docker-compose up -d
+            docker ps
+          ENDSSH
+
+      - name: Restart Worker
+        run: |
+          ssh -i key.pem -o StrictHostKeyChecking=no \
+            ec2-user@${{ secrets.WORKER_IP }} \
+            "sudo systemctl restart proyecto1-worker.service"
+
+      - name: Health Check
+        run: |
+          sleep 10
+          curl -f http://${{ secrets.WEB_SERVER_IP }}/api/health || exit 1
+          echo "✅ Deployment successful!"
+          echo "🌐 Application URL: http://${{ secrets.WEB_SERVER_IP }}"
