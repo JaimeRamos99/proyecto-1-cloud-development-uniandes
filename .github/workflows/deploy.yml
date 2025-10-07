@@ -65,8 +65,8 @@ jobs:
           platforms: linux/amd64
           push: true
           tags: |
-            ${{ secrets.ECR_REGISTRY }}/$ECR_API_REPO:${{ github.sha }}
-            ${{ secrets.ECR_REGISTRY }}/$ECR_API_REPO:latest
+            ${{ secrets.ECR_REGISTRY }}/${{ env.ECR_API_REPO }}:${{ github.sha }}
+            ${{ secrets.ECR_REGISTRY }}/${{ env.ECR_API_REPO }}:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -77,8 +77,8 @@ jobs:
           platforms: linux/amd64
           push: true
           tags: |
-            ${{ secrets.ECR_REGISTRY }}/$ECR_WORKER_REPO:${{ github.sha }}
-            ${{ secrets.ECR_REGISTRY }}/$ECR_WORKER_REPO:latest
+            ${{ secrets.ECR_REGISTRY }}/${{ env.ECR_WORKER_REPO }}:${{ github.sha }}
+            ${{ secrets.ECR_REGISTRY }}/${{ env.ECR_WORKER_REPO }}:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
       - name: Build and push Frontend image
@@ -88,8 +88,8 @@ jobs:
           platforms: linux/amd64
           push: true
           tags: |
-            ${{ secrets.ECR_REGISTRY }}/$ECR_FRONTEND_REPO:${{ github.sha }}
-            ${{ secrets.ECR_REGISTRY }}/$ECR_FRONTEND_REPO:latest
+            ${{ secrets.ECR_REGISTRY }}/${{ env.ECR_FRONTEND_REPO }}:${{ github.sha }}
+            ${{ secrets.ECR_REGISTRY }}/${{ env.ECR_FRONTEND_REPO }}:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -189,7 +189,7 @@ jobs:
             sudo docker rm proyecto1-api-aws || true
             
             # Pull latest image
-            sudo docker pull ${{ secrets.ECR_REGISTRY }}/$ECR_API_REPO:latest
+            sudo docker pull ${{ secrets.ECR_REGISTRY }}/${{ env.ECR_API_REPO }}:latest
             
             # Start new API container
             sudo docker run -d --name proyecto1-api-aws --restart unless-stopped \
@@ -199,15 +199,15 @@ jobs:
               -e S3_BUCKET_NAME=${{ secrets.S3_BUCKET_NAME }} \
               -e SQS_QUEUE_NAME=${{ secrets.SQS_QUEUE_NAME }} \
               -e JWT_SECRET=${{ secrets.JWT_SECRET }} \
-              ${{ secrets.ECR_REGISTRY }}/$ECR_API_REPO:latest
+              ${{ secrets.ECR_REGISTRY }}/${{ env.ECR_API_REPO }}:latest
             
             # Restart frontend container
             sudo docker stop proyecto1-frontend-aws || true
             sudo docker rm proyecto1-frontend-aws || true
-            sudo docker pull ${{ secrets.ECR_REGISTRY }}/$ECR_FRONTEND_REPO:latest
+            sudo docker pull ${{ secrets.ECR_REGISTRY }}/${{ env.ECR_FRONTEND_REPO }}:latest
             sudo docker run -d --name proyecto1-frontend-aws --restart unless-stopped \
               -p 80:80 \
-              ${{ secrets.ECR_REGISTRY }}/$ECR_FRONTEND_REPO:latest
+              ${{ secrets.ECR_REGISTRY }}/${{ env.ECR_FRONTEND_REPO }}:latest
             
             # Show running containers
             sudo docker ps
@@ -222,7 +222,7 @@ jobs:
             sudo docker rm proyecto1-worker-aws || true
             
             # Pull latest image
-            sudo docker pull ${{ secrets.ECR_REGISTRY }}/$ECR_WORKER_REPO:latest
+            sudo docker pull ${{ secrets.ECR_REGISTRY }}/${{ env.ECR_WORKER_REPO }}:latest
             
             # Start new worker container with fixed AWS credentials
             sudo docker run -d --name proyecto1-worker-aws --restart unless-stopped \
@@ -230,7 +230,7 @@ jobs:
               -e DB_PASSWORD=${{ secrets.DB_PASSWORD }} \
               -e S3_BUCKET_NAME=${{ secrets.S3_BUCKET_NAME }} \
               -e SQS_QUEUE_NAME=${{ secrets.SQS_QUEUE_NAME }} \
-              ${{ secrets.ECR_REGISTRY }}/$ECR_WORKER_REPO:latest
+              ${{ secrets.ECR_REGISTRY }}/${{ env.ECR_WORKER_REPO }}:latest
             
             # Show running containers
             sudo docker ps
