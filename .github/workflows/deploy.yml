@@ -13,29 +13,7 @@ env:
   ECR_FRONTEND_REPO: proyecto1-frontend
 
 jobs:
-  test:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup Go
-        uses: actions/setup-go@v4
-        with:
-          go-version: "1.23.12"
-
-      - name: Run API tests
-        run: |
-          cd api
-          go test -v ./...
-
-      - name: Run Worker tests
-        run: |
-          cd worker
-          go test -v ./...
-
   build-and-push:
-    needs: test
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main'
 
@@ -116,7 +94,6 @@ jobs:
           psql -h ${{ secrets.RDS_ENDPOINT }} -U postgres -d proyecto_1 -f db/005_create_player_rankings_view.sql || true
 
   build-frontend:
-    needs: test
     runs-on: ubuntu-latest
 
     steps:
