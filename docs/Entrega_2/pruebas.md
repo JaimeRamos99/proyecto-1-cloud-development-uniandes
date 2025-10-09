@@ -9,20 +9,15 @@ Marilyn Joven
 
 ## 1. Resumen 
 
-Se realizaron pruebas de carga sobre el sistema ANB para evaluar su capacidad de procesamiento de videos bajo diferentes niveles de concurrencia. Las pruebas incluyeron tres fases: funcional, carga normal y estrés, con el objetivo de identificar los límites operacionales del sistema.
-
-**Resultados Principales:**
-- El sistema soporta adecuadamente hasta 20 usuarios concurrentes
-- Los tiempos de respuesta permanecen dentro de rangos aceptables bajo carga normal
-- El servidor no colapsó durante las pruebas de estrés intenso
-
-- ⚠️ Con 50 usuarios concurrentes se alcanza el límite de capacidad (10% error rate)
+Se realizaron pruebas de carga sobre el sistema para evaluar su capacidad de procesamiento de videos bajo diferentes niveles de concurrencia. Las pruebas incluyeron tres fases: funcional, carga normal y estrés, con el objetivo de identificar los límites operacionales del sistema.
 
 ## 2. Configuración del Entorno
 
 ### 2.1 Infraestructura
 - **Servidor de aplicación:** http://13.223.138.92
-- **Arquitectura:** Nginx + API Go + PostgreSQL + S3 + SQS
+- **Arquitectura:**
+![image](/docs/Entrega_2/DiagramaArquitectura.png)
+
 
 
 ### 2.2 Datos de Prueba
@@ -50,10 +45,9 @@ Se realizaron pruebas de carga sobre el sistema ANB para evaluar su capacidad de
 **Objetivo:** Verificar la funcionalidad básica de todos los endpoints.
 
 **Configuración:**
-- Usuarios concurrentes: 5
-- Ramp-up: 60 segundos
-- Duración: ~2 minutos
-- Loop count: 2
+- Usuarios concurrentes: 10
+- Duración: <1 minuto
+- Requests totales: 40
 
 **Flujo de prueba:**
 1. Login de usuario
@@ -62,21 +56,35 @@ Se realizaron pruebas de carga sobre el sistema ANB para evaluar su capacidad de
 4. Consulta de rankings
 
 **Resultados:**
-- **Requests totales:** 20
-- **Tasa de éxito:** 100%
-- **Tiempo de respuesta promedio:** <200ms
-- **Estado:** Todos los endpoints funcionando correctamente
+
+| Endpoint | Samples | Error Rate | Avg Response Time | APDEX |
+|----------|---------|------------|-------------------|-------|
+| Login Usuario | 10 | 10% | 200.40ms | 0.900 |
+| Get Profile | 10 | 10% | 83.80ms | 0.900 |
+| Get Public Videos | 10 | 0% | 630.30ms | 0.550 |
+| Get Rankings | 10 | 0% | 86.10ms | 1.000 |
+| **Total** | **40** | **5%** | **250.15ms** | **0.838** |
+
+**Errores Detectados:**
+- 400/Bad Request: 1 (2.5%) - Login
+- 401/Unauthorized: 1 (2.5%) - Get Profile
+
+**Análisis:**
+- Funcionalidad básica operativa
+- Throughput: 4.03 transactions/s
+- Endpoint "Get Public Videos" tiene APDEX bajo (0.550) con tiempo de respuesta de 630ms
+- 5% de error base detectado (posible issue de configuración de pruebas)
 
 ---
 
-### 3.2 Fase 2: Carga Normal
+### 3.2 Fase 2: Carga Normal (10 usuarios)
 
 **Objetivo:** Evaluar el comportamiento del sistema bajo carga esperada de producción.
 
 **Configuración:**
 - Usuarios concurrentes: 10
 - Ramp-up: 300 segundos (1 usuario cada 30s)
-- Duración: ~10 minutos
+- Duración: 6 minutos
 - Loop count: 1
 
 **Flujo de prueba:**
@@ -86,20 +94,25 @@ Se realizaron pruebas de carga sobre el sistema ANB para evaluar su capacidad de
 
 **Resultados:**
 
-| Métrica | Valor | Objetivo | Estado |
-|---------|-------|----------|--------|
-| Requests totales | 30 | - | ✅ |
-| Tasa de éxito | 100% | >95% | ✅ |
-| Response time promedio | 234ms | <500ms | ✅ |
-| Upload time promedio | ~30s | <60s | ✅ |
-| Throughput | 0.1 req/s | >0.08 req/s | ✅ |
-| Error rate | 0% | <2% | ✅ |
+| Endpoint | Samples | Error Rate | Avg Time | Min | Max | Median | 90th pct | 95th pct | APDEX |
+|----------|---------|------------|----------|-----|-----|--------|----------|----------|-------|
+| Login Usuario | 10 | 10% | 320.60ms | 185ms | 1020ms | 243.50ms | 947.60ms | 1020ms | 0.850 |
+| Upload Video | 10 | 10% | 94875.70ms | 32915ms | 157717ms | 95231ms | 156172ms | 157717ms | 0.000 |
+| Check Video Status | 10 | 10% | 153.20ms | 82ms | 213ms | 174.50ms | 209.70ms | 213ms | 0.900 |
+| **Total** | **30** | **10%** | **31783.17ms** | **82ms** | **157717ms** | **243.50ms** | **138997.90ms** | **149219.50ms** | **0.583** |
+
+**Errores Detectados:**
+- 400/Bad Request: 1 (3.33%) - Login
+- 502/Bad Gateway: 1 (3.33%) - Upload Video
+- 401/Unauthorized: 1 (3.33%) - Check Video Status
 
 **Análisis:**
-- Los tiempos de respuesta de la API permanecen por debajo de 500ms
-- Los uploads de video se completan en tiempos aceptables (~30-45 segundos para videos de 10-50MB)
-- No se registraron errores durante la prueba
-- El sistema maneja eficientemente 10 usuarios concurrentes
+- Tasa de error del 10% en todos los endpoints (patrón consistente)
+- Tiempo promedio de upload extremadamente alto: **~95 segundos** (vs objetivo <60s)
+- Upload máximo alcanzó **157.7 segundos** (2.6 minutos)
+- API endpoints mantienen buenos tiempos de respuesta (<500ms)
+- APDEX Total bajo (0.583) indica experiencia de usuario no satisfactoria
+- 502/Bad Gateway sugiere problemas de timeout o sobrecarga del servidor
 
 ---
 
@@ -113,79 +126,93 @@ Se realizaron pruebas de carga sobre el sistema ANB para evaluar su capacidad de
 - Usuarios concurrentes: 20
 - Ramp-up: 300 segundos
 - Duración: 7 minutos
+- Requests totales: 60
 
 **Resultados:**
 
-| Métrica | Valor | Estado |
-|---------|-------|--------|
-| Requests totales | 60 | ✅ |
-| Tasa de éxito | 95% | ✅ |
-| Errores | 3 (5%) | ⚠️ Aceptable |
-| Response time promedio | 34 segundos | ✅ |
-| Response time máximo | 164 segundos | ⚠️ |
-| Throughput | 0.1 req/s | ✅ |
+| Endpoint | Samples | Error Rate | Avg Time | Min | Max | Median | 90th pct | 95th pct | APDEX |
+|----------|---------|------------|----------|-----|-----|--------|----------|----------|-------|
+| Login Usuario | 20 | 5% | 250.35ms | 184ms | 343ms | 248ms | 262.70ms | 339ms | 0.950 |
+| Upload Video | 20 | 5% | 81003.80ms | 30077ms | 147673ms | 70923.50ms | 125984.40ms | 146605.50ms | 0.000 |
+| Check Video Status | 20 | 5% | 155.45ms | 81ms | 238ms | 183.50ms | 232.50ms | 237.75ms | 0.950 |
+| **Total** | **60** | **5%** | **27136.53ms** | **81ms** | **147673ms** | **248ms** | **119511.70ms** | **122857.10ms** | **0.633** |
+
+**Errores Detectados:**
+- 401/Unauthorized: 2 (3.33%)
+- 400/Bad Request: 1 (1.67%)
 
 **Observaciones:**
-- El sistema mantiene una tasa de error aceptable (5%)
-- Los tiempos de respuesta aumentan pero permanecen manejables
-- El servidor responde de manera consistente
+- Tasa de error mejoró a 5% (vs 10% con 10 usuarios)
+- Endpoints de API mantienen excelente rendimiento (<250ms)
+- APDEX de Login y Check Status mejoró a 0.950
+- Tiempos de upload siguen siendo críticos: **~81 segundos promedio**
+- Upload máximo: **147.7 segundos** (2.5 minutos)
 
 #### 3.3.2 Estrés Intenso (50 usuarios)
 
-**Objetivo:** Identificar el punto de quiebre del sistema.
+**Objetivo:** Identificar el comportamiento del sistema bajo alta concurrencia.
 
 **Configuración:**
 - Usuarios concurrentes: 50
 - Ramp-up: 600 segundos
-- Duración: 12 minutos
+- Duración: 13 minutos
+- Requests totales: 150
 
 **Resultados:**
 
-| Métrica | Valor | Estado |
-|---------|-------|--------|
-| Requests totales | 150 | ✅ |
-| Tasa de éxito | 90% | ⚠️ Límite |
-| Errores | 15 (10%) | ⚠️ |
-| Response time promedio | 36 segundos | ⚠️ |
-| Response time máximo | 190 segundos | ❌ |
-| Throughput | 0.2 req/s | ✅ |
+| Endpoint | Samples | Error Rate | Avg Time | Min | Max | Median | 90th pct | 95th pct | APDEX |
+|----------|---------|------------|----------|-----|-----|--------|----------|----------|-------|
+| Login Usuario | 50 | 10% | 254.98ms | 166ms | 425ms | 253ms | 281.60ms | 323.70ms | 0.900 |
+| Upload Video | 50 | 10% | 98298.52ms | 26812ms | 199359ms | 94881ms | 154324.50ms | 168235.45ms | 0.000 |
+| Check Video Status | 50 | 10% | 160.32ms | 86ms | 243ms | 179.50ms | 205ms | 216.45ms | 0.900 |
+| **Total** | **150** | **10%** | **32904.61ms** | **86ms** | **199359ms** | **253ms** | **140715.10ms** | **152102.70ms** | **0.600** |
+
+**Errores Detectados:**
+- 401/Unauthorized: 9 (6.00%) - **Predominante**
+- 400/Bad Request: 3 (2.00%)
+- 502/Bad Gateway: 3 (2.00%)
+
+**Distribución de Errores por Endpoint:**
+- Login Usuario: 3× 400/Bad Request, 2× 401/Unauthorized
+- Upload Video: 3× 502/Bad Gateway, 2× 401/Unauthorized
+- Check Video Status: 5× 401/Unauthorized
 
 **Observaciones:**
-- La tasa de error alcanza el 10%, indicando saturación del sistema
-- Los tiempos de respuesta se incrementan significativamente
-- El servidor permaneció disponible durante toda la prueba
-- Se identificaron timeouts ocasionales en operaciones de upload
+- API endpoints mantienen rendimiento estable (~255ms)
+- Tasa de error regresó al 10% con alta concurrencia
+- 60% de errores son 401/Unauthorized, sugiere problemas con gestión de tokens
+- 502/Bad Gateway indica timeouts del servidor bajo carga
+- Tiempo promedio de upload crítico: **~98 segundos**
+- Upload máximo alcanzó **199.4 segundos** (3.3 minutos)
 
 
+# 4. Análisis de Resultados
 
-## 4. Análisis de Resultados
+### 4.1 Rendimiento por Nivel de Carga
 
-### 4.1 Capacidad del Sistema
+| Nivel de Usuarios | Samples | Error Rate | Avg Response Time | APDEX | Estado |
+|-------------------|---------|------------|-------------------|-------|--------|
+| Funcional (10) | 40 | 5% | 250ms | 0.838 |  Bueno |
+| Normal (10) | 30 | 10% | 31.8s | 0.583 |  Aceptable |
+| Moderado (20) | 60 | 5% | 27.1s | 0.633 |  Aceptable |
+| Intenso (50) | 150 | 10% | 32.9s | 0.600 |  Límite |
 
-| Nivel de Usuarios | Error Rate | Evaluación | Uso Recomendado |
-|-------------------|------------|------------|-----------------|
-| 5-10 usuarios | 0-2% | ✅ Óptimo | Operación normal |
-| 10-20 usuarios | 2-5% | ✅ Aceptable | Carga esperada |
-| 20-30 usuarios | 5-8% | ⚠️ Límite | Requiere monitoreo |
-| 50+ usuarios | 10%+ | ❌ Saturación | No recomendado |
+### 4.2 Análisis por Operación
 
-### 4.2 Puntos Críticos Identificados
+#### 4.2.1 Endpoints de API (Login, Check Status)
+**Rendimiento:**  **EXCELENTE**
+- Tiempos de respuesta consistentes: 150-320ms
+- APDEX: 0.850-0.950 (excelente experiencia)
+- Escalabilidad demostrada hasta 50 usuarios concurrentes
+- Degradación mínima bajo carga
 
-1. **Capacidad Óptima:** 10-20 usuarios concurrentes
-2. **Capacidad Máxima:** ~30 usuarios concurrentes (antes de degradación significativa)
-3. **Punto de Saturación:** 50+ usuarios concurrentes (10% error rate)
-
-### 4.3 Tiempos de Respuesta
-
-**Bajo Carga Normal (10 usuarios):**
-- API endpoints: 100-300ms ✅
-- Video uploads: 30-45 segundos ✅
-- Video status checks: <200ms ✅
-
-**Bajo Estrés (50 usuarios):**
-- API endpoints: 200-500ms ⚠️
-- Video uploads: 30-190 segundos ❌
-- Variabilidad alta en tiempos de respuesta
+#### 4.2.2 Upload de Videos
+**Rendimiento:**  **CRÍTICO**
+- Tiempo promedio: 81-98 segundos
+- APDEX: 0.000 (experiencia frustrante)
+- Máximo observado: 199 segundos (>3 minutos)
+- No cumple objetivo de <60 segundos
+- Genera 502/Bad Gateway bajo carga
 
 
 ## 5. Cuellos de Botella Detectados
@@ -207,18 +234,48 @@ Se realizaron pruebas de carga sobre el sistema ANB para evaluar su capacidad de
 
 ### 6.1 Cumplimiento de Objetivos
 
-| Criterio | Objetivo | Resultado | Estado |
-|----------|----------|-----------|--------|
-| Response Time API | <500ms | 200-400ms | ✅ |
-| Upload Time (50MB) | <60s | 30-45s | ✅ |
-| Throughput | >0.08 req/s | 0.1-0.2 req/s | ✅ |
-| Error Rate (normal) | <2% | 0% | ✅ |
-| Disponibilidad | >95% | 100% | ✅ |
+| Criterio | Objetivo | Resultado Real | Estado |
+|----------|----------|----------------|--------|
+| Response Time API | <500ms | 150-320ms | ✅ Cumple |
+| Upload Time | <60s | 81-98s | ❌ No cumple |
+| Error Rate | <2% | 5-10% | ❌ No cumple |
+| Disponibilidad | >95% | 90-95% | ⚠️ Límite |
+| APDEX | >0.7 | 0.583-0.633 | ⚠️ No cumple |
 
-### 6.2 Capacidad Actual
+### 6.2 Resumen de Capacidad
 
-El sistema **cumple satisfactoriamente** con los requisitos de carga esperada:
-- Soporta 10-20 usuarios concurrentes sin degradación
-- Mantiene tiempos de respuesta dentro de objetivos bajo carga normal
-- Alta disponibilidad durante las pruebas
-- ⚠️ Límite de capacidad identificado en ~30 usuarios concurrentes
+**Fortalezas:**
+- Endpoints de API mantienen excelente rendimiento bajo toda carga
+- Sistema no colapsa hasta 50 usuarios concurrentes
+- Tiempos de respuesta de consultas consistentes
+
+**Debilidades Críticas:**
+- Upload de videos 60% más lento que objetivo
+- Tasa de error base del 10% inaceptable para producción
+- Problemas de autenticación (401) bajo carga
+- 502/Bad Gateway indica configuración de timeouts inadecuada
+
+
+# Reportes
+
+- [Carga Funcional](/docs/Entrega_2/reportes_pdf/funcional/funcional.pdf)
+- [Carga Normal](/docs/Entrega_2/reportes_pdf/carga-normal/carga-normal.pdf)
+- [Carga Estres Moderado](/docs/Entrega_2/reportes_pdf/estres/stress-moderate.pdf)
+- [Carga Estres Intenso](/docs/Entrega_2/reportes_pdf/estres/stress-intense.pdf)
+
+Para poder ver el reporte completo se recomienda descomprimir las carpetas y ejecutar el html con los siguientes comandos.
+
+``` shell
+cd docs/Entrega_2/pruebas-de-carga/reportes/
+
+unzip funcional.zip
+open funcional/html_20251009_175820/index.html   
+
+unzip carga-normal.zip
+open carga-normal/html_20251009_175820/index.html   
+
+unzip estres.zip
+open estres/html_moderate_20251009_143010/index.html   
+open estres/html_intense_20251009_143010/index.html   
+
+```

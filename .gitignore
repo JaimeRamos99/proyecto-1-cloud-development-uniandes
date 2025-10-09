@@ -159,3 +159,9 @@ site/
 # Backup files
 *.bak
 *.backup
+
+docs/Entrega_2/pruebas-de-carga/reportes/*/html_*/
+docs/Entrega_2/pruebas-de-carga/reportes/*/*.jtl
+
+!docs/Entrega_2/pruebas-de-carga/reportes/summary/
+!docs/Entrega_2/pruebas-de-carga/reportes/simple-report*.html
