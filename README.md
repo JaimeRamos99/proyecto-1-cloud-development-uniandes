@@ -44,10 +44,20 @@ Una vez ejecutado `make local`:
 
 ### Documentación
 
-Toda la documentación del proyecto se encuentra en `docs/Entrega_1/`:
+Toda la documentación para la Entrega 1 del proyecto se encuentra en `docs/Entrega_1/`:
 
 - **Diagrama ERD** - Modelo de datos y relaciones
 - **Diagramas C4** - Arquitectura del sistema (niveles 1, 2 y 3)
 - **Diagrama de flujo de procesamiento** - Proceso completo de carga y procesamiento de videos
 - **Decisiones de Arquitectura** - Justificación de decisiones de diseño clave
 - **Especificación API (Swagger)** - Documentación completa de endpoints
+
+Toda la documentación para la Entrega 2 del proyecto se encuentra en `docs/Entrega_2/`:
+
+- **Diagrama de Arquitectura** - Arquitectura definida
+- **Diagrama de Despliegue** - Diagrama de despliegue
+- **Documentacion Arquitectura** - Explicación del diseño de la arquitectura.
+- **Documentacion Pruebas** - Procedimiento y explicación de la estructura de las pruebas de carga.
+- **Pruebas de carga** - Ejecución de las pruebas de carga
+- **Reportes PDF** - Resumen de los reportes de las pruebas de Funcionalidad, Carga Normal y Estrés.
+

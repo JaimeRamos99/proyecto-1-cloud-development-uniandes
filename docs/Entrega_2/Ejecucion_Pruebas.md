@@ -3,9 +3,6 @@
 **Servidor:** http://13.223.138.92  
 **Herramienta:** Apache JMeter 5.6.3  
 
-Jaime Ramos\
-Marilyn Joven
-
 
 ## 1. Resumen 
 
