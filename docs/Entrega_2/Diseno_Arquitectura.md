@@ -52,7 +52,7 @@ Procesa videos de forma asíncrona. Obtiene mensajes de SQS, descarga videos de 
 
 Base de datos para metadatos de usuarios, información de trabajos de procesamiento y referencias a archivos en S3.
 
-**Configuración:** `publicly_accessible = false`, cifrado habilitado, backups automáticos
+**Configuración:** privada, cifrado habilitado, backups automáticos
 
 ### 4. Amazon SQS (Servicio Administrado)
 
@@ -93,7 +93,7 @@ Web Server en subnet pública (accesible desde Internet), mientras Worker y RDS 
 
 ### RDS Accessibility
 
-**Decisión:** `publicly_accessible = false`
+**Decisión:** privada
 
 La base de datos no es accesible desde Internet. Solo Web Server y Worker pueden conectarse mediante Security Groups. Acceso administrativo via Session Manager o bastion host.
 
