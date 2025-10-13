@@ -31,7 +31,7 @@ El sistema sigue una arquitectura de **microservicios distribuidos** con procesa
 
 ### Diagrama de Despliegue
 
-![Diagrama de Despliegue](/docs/Entrega_2/DiagramaDespliegue.png)
+![Diagrama de Despliegue](/docs/Entrega_2/DiagramaDespliegue.jpeg)
 
 
 ## Componentes de la Arquitectura
@@ -147,12 +147,12 @@ terraform apply
 
 **Variables en `terraform.tfvars`:**
 ```hcl
-project_name         = "video-processing"
-allowed_ssh_cidr     = "tu.ip.publica/32"
-db_username          = "admin"
+project_name         = "proyecto1"
+allowed_ssh_cidr     = "0.0.0.0/0"
+db_username          = "postgres"
 db_password          = "secure-password"
-web_instance_class   = "t3.medium"
-worker_instance_class = "t3.large"
+web_instance_class   = "t3.small"
+worker_instance_class = "t3.small"
 ```
 
 **Scripts user-data:** Actualizan sistema, instalan dependencias, clonan repo, configuran variables de entorno e inician servicios.
