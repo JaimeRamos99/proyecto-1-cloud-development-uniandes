@@ -132,3 +132,64 @@ variable "additional_tags" {
   default     = {}
 }
 
+# Auto Scaling Configuration
+variable "asg_min_size" {
+  description = "Minimum number of instances in Auto Scaling Group"
+  type        = number
+  default     = 1
+}
+
+variable "asg_max_size" {
+  description = "Maximum number of instances in Auto Scaling Group"
+  type        = number
+  default     = 3
+}
+
+variable "asg_desired_capacity" {
+  description = "Desired number of instances in Auto Scaling Group"
+  type        = number
+  default     = 2
+}
+
+variable "cpu_scale_up_threshold" {
+  description = "CPU percentage to trigger scale up"
+  type        = number
+  default     = 70
+}
+
+variable "cpu_scale_down_threshold" {
+  description = "CPU percentage to trigger scale down"
+  type        = number
+  default     = 30
+}
+
+variable "cpu_target_value" {
+  description = "Target CPU utilization for target tracking scaling"
+  type        = number
+  default     = 50
+}
+
+# CloudWatch Configuration
+variable "log_retention_days" {
+  description = "CloudWatch log retention in days"
+  type        = number
+  default     = 7
+}
+
+variable "create_sns_topic" {
+  description = "Whether to create SNS topic for alarms"
+  type        = bool
+  default     = false
+}
+
+variable "alarm_email" {
+  description = "Email address for alarm notifications"
+  type        = string
+  default     = ""
+}
+
+variable "sns_topic_arn" {
+  description = "Existing SNS topic ARN for alarms (if not creating new one)"
+  type        = string
+  default     = ""
+}
