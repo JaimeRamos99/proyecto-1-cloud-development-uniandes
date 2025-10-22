@@ -10,7 +10,6 @@ env:
   AWS_REGION: us-east-1
   ECR_API_REPO: proyecto1-api
   ECR_WORKER_REPO: proyecto1-worker
-  ECR_FRONTEND_REPO: proyecto1-frontend
 
 jobs:
   build-and-push:
@@ -59,17 +58,7 @@ jobs:
             ${{ secrets.ECR_REGISTRY }}/${{ env.ECR_WORKER_REPO }}:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
-      - name: Build and push Frontend image
-        uses: docker/build-push-action@v5
-        with:
-          context: ./front
-          platforms: linux/amd64
-          push: true
-          tags: |
-            ${{ secrets.ECR_REGISTRY }}/${{ env.ECR_FRONTEND_REPO }}:${{ github.sha }}
-            ${{ secrets.ECR_REGISTRY }}/${{ env.ECR_FRONTEND_REPO }}:latest
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+      
 
   migrate-database:
     needs: build-and-push
@@ -154,9 +143,10 @@ jobs:
           scp -i key.pem -o StrictHostKeyChecking=no \
             nginx/nginx.aws.conf ec2-user@${{ secrets.WEB_SERVER_IP }}:~/proyecto1/
 
-          # Copy frontend files
-          scp -i key.pem -o StrictHostKeyChecking=no -r \
-            front/dist/* ec2-user@${{ secrets.WEB_SERVER_IP }}:~/proyecto1/frontend-dist/
+          # Frontend to S3
+          - name: Upload frontend to S3
+          run: |
+          aws s3 sync front/dist s3://${{ secrets.S3_BUCKET_NAME }} --delete
 
           # Restart API container with new image
           ssh -i key.pem -o StrictHostKeyChecking=no \

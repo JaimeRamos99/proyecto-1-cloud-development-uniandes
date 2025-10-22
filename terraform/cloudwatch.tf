@@ -253,12 +253,6 @@ resource "aws_sns_topic_subscription" "alarm_email" {
   endpoint  = var.alarm_email
 }
 
-# Outputs
-output "cloudwatch_dashboard_url" {
-  value       = "https://console.aws.amazon.com/cloudwatch/home?region=${var.aws_region}#dashboards:name=${aws_cloudwatch_dashboard.main.dashboard_name}"
-  description = "URL to CloudWatch Dashboard"
-}
-
 output "sns_topic_arn" {
   value       = var.create_sns_topic ? aws_sns_topic.alarms[0].arn : ""
   description = "SNS Topic ARN for alarms"

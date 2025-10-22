@@ -139,16 +139,5 @@ resource "aws_cloudfront_distribution" "frontend" {
   }
 }
 
-# Output the frontend URLs
-output "frontend_s3_website_url" {
-  value = "http://${aws_s3_bucket_website_configuration.frontend.website_endpoint}"
-  description = "S3 static website URL"
-}
-
-output "frontend_cloudfront_url" {
-  value = "https://${aws_cloudfront_distribution.frontend.domain_name}"
-  description = "CloudFront distribution URL"
-}
-
 # Data source for current AWS account
 data "aws_caller_identity" "current" {}

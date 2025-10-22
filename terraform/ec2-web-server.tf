@@ -18,7 +18,6 @@ resource "aws_instance" "web_server" {
   user_data = templatefile("${path.module}/user-data-web-server.sh", {
     aws_region          = var.aws_region
     ecr_api_url         = aws_ecr_repository.api.repository_url
-    ecr_frontend_url      = aws_ecr_repository.frontend.repository_url
     ecr_image_tag       = var.ecr_image_tag
     db_host             = aws_db_instance.main.address
     db_port             = aws_db_instance.main.port
@@ -30,6 +29,7 @@ resource "aws_instance" "web_server" {
     sqs_queue_url       = aws_sqs_queue.video_processing.url
     sqs_queue_name      = var.sqs_queue_name
     project_name        = var.project_name
+    frontend_url        = "https://${aws_cloudfront_distribution.frontend.domain_name}"
   })
 
   # Wait for RDS to be available before launching

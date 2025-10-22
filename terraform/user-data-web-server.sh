@@ -1,55 +1,66 @@
 #!/bin/bash
-# Proyecto_1 - Web Server Initialization Script
-# This script runs on first boot to set up the web server
+# ===============================================
+# Proyecto 1 - Web Server Initialization (ASG)
+# ===============================================
 
-set -e
+set -euo pipefail
 
-# Log everything
-exec > >(tee /var/log/user-data.log)
-exec 2>&1
+# Log all output to /var/log/user-data.log
+exec > >(tee /var/log/user-data.log | logger -t user-data -s 2>/dev/console) 2>&1
 
 echo "==================================="
 echo "Starting Web Server Initialization"
 echo "==================================="
 
-# Update system
+# --- Update packages ---
 echo "Updating system packages..."
 dnf update -y
 
-# Install Docker
+# --- Install Docker ---
 echo "Installing Docker..."
 dnf install -y docker
-systemctl start docker
 systemctl enable docker
+systemctl start docker
 usermod -aG docker ec2-user
 
-# Install Docker Compose
+# --- Install Docker Compose ---
 echo "Installing Docker Compose..."
 curl -L "https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
 chmod +x /usr/local/bin/docker-compose
 ln -sf /usr/local/bin/docker-compose /usr/bin/docker-compose
 
-# Install AWS CLI v2
+# --- Install AWS CLI v2 ---
 echo "Installing AWS CLI..."
-curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+curl -s "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
 unzip -q awscliv2.zip
 ./aws/install
 rm -rf aws awscliv2.zip
 
-# Create project directory
-echo "Creating project directory..."
+# --- Create app directory ---
 mkdir -p /home/ec2-user/proyecto1
 cd /home/ec2-user/proyecto1
 
-# Create docker-compose.yml
-echo "Creating Docker Compose configuration..."
-cat > docker-compose.yml << 'EOF'
+# --- Create Nginx config ---
+cat > nginx.aws.conf << 'EOF'
+events {}
+http {
+  server {
+    listen 80;
+    location / {
+      proxy_pass http://localhost:8080;
+    }
+  }
+}
+EOF
+
+# --- Create Docker Compose file ---
+cat > docker-compose.yml << EOF
 version: '3.8'
 
 services:
   api:
     image: ${ecr_api_url}:${ecr_image_tag}
-    container_name: ${project_name}-api-aws
+    container_name: ${project_name}-api
     restart: unless-stopped
     environment:
       - DB_DRIVER=postgres
@@ -71,71 +82,46 @@ services:
       - APP_VERSION=1.0.0
       - APP_ENV=production
       - AWS_DEFAULT_REGION=${aws_region}
-      - AWS_ENDPOINT_URL=
       - S3_BUCKET_NAME=${s3_bucket_name}
       - SQS_QUEUE_NAME=${sqs_queue_name}
-    network_mode: host
+      - SQS_QUEUE_URL=${sqs_queue_url}
+      - FRONTEND_URL=${frontend_url}
+    ports:
+      - "8080:8080"
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/api/health"]
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
       interval: 30s
       timeout: 10s
       retries: 3
-
-  frontend:
-    image: ${ecr_frontend_url}:${ecr_image_tag}
-    container_name: ${project_name}-frontend-aws
-    restart: unless-stopped
-    network_mode: host
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-
 
   nginx:
     image: nginx:alpine
-    container_name: ${project_name}-nginx-aws
+    container_name: ${project_name}-nginx
     restart: unless-stopped
     network_mode: host
     volumes:
       - ./nginx.aws.conf:/etc/nginx/nginx.conf:ro
     depends_on:
-      - frontend
       - api
-    healthcheck:
-      test: ["CMD", "wget", "-q", "--spider", "http://localhost/nginx-health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-
 EOF
 
-# Create placeholder directories
-mkdir -p frontend-dist
-
-# Set proper permissions
+# --- Set permissions ---
 chown -R ec2-user:ec2-user /home/ec2-user/proyecto1
 
-# Login to ECR
-echo "Logging in to ECR..."
-ECR_REGISTRY=$(echo "${ecr_api_url}" | cut -d"/" -f1)
-aws ecr get-login-password --region ${aws_region} | docker login --username AWS --password-stdin $ECR_REGISTRY || echo "ECR login failed, but continuing..."
+# --- Login to ECR ---
+ECR_REGISTRY=$(echo "${ecr_api_url}" | cut -d'/' -f1)
+echo "Logging in to ECR registry: $ECR_REGISTRY"
+aws ecr get-login-password --region ${aws_region} | docker login --username AWS --password-stdin $ECR_REGISTRY || echo "ECR login failed (might be temporary)"
 
-# Ensure AWS credentials are available for containers
-echo "Setting up AWS credentials for containers..."
-mkdir -p /home/ec2-user/.aws
-# The EC2 instance already has IAM role attached, so we just need to ensure the directory exists
-# The AWS SDK will automatically use the instance profile
-
-# Note: Images need to be built and pushed before this will work
-# The containers will be started manually after deployment
+# --- Pull API image and start services ---
+echo "Pulling latest API image..."
+if docker pull ${ecr_api_url}:${ecr_image_tag}; then
+  echo "Starting containers..."
+  docker-compose up -d
+else
+  echo "ECR image not found yet; skipping container startup."
+fi
 
 echo "==================================="
 echo "Web Server Initialization Complete"
 echo "==================================="
-echo "Next steps:"
-echo "1. Push Docker images to ECR"
-echo "2. Copy nginx.config and frontend files"
-echo "3. Run: docker-compose up -d"
-

@@ -21,7 +21,7 @@ resource "aws_lb" "api" {
 # ALB Target Group
 resource "aws_lb_target_group" "api" {
   name     = "${var.project_name}-api-tg"
-  port     = 3000
+  port     = 8080
   protocol = "HTTP"
   vpc_id   = data.aws_vpc.default.id
 
@@ -60,6 +60,30 @@ resource "aws_lb_listener" "api" {
   }
 }
 
+data "aws_subnets" "all" {
+  filter {
+    name   = "vpc-id"
+    values = [data.aws_vpc.default.id]
+  }
+}
+
+data "aws_subnet" "details" {
+  for_each = toset(data.aws_subnets.all.ids)
+  id       = each.value
+}
+
+locals {
+  # Exclude AZs that lack t3.small capacity (e.g., us-east-1e)
+  valid_subnets = [
+    for s in data.aws_subnets.all.ids : s
+    if contains(
+      ["us-east-1a", "us-east-1b", "us-east-1c", "us-east-1d", "us-east-1f"],
+      data.aws_subnet.details[s].availability_zone
+    )
+  ]
+}
+
+
 # Launch Template for Auto Scaling
 resource "aws_launch_template" "api" {
   name_prefix   = "${var.project_name}-api-"
@@ -82,7 +106,7 @@ resource "aws_launch_template" "api" {
     }
   }
 
-  user_data = base64encode(templatefile("${path.module}/user-data-api.sh", {
+  user_data = base64encode(templatefile("${path.module}/user-data-web-server.sh", {
     aws_region          = var.aws_region
     ecr_api_url        = aws_ecr_repository.api.repository_url
     ecr_image_tag      = var.ecr_image_tag
@@ -128,7 +152,7 @@ resource "aws_autoscaling_group" "api" {
     version = "$Latest"
   }
 
-  vpc_zone_identifier = data.aws_subnets.default.ids
+  vpc_zone_identifier = local.valid_subnets
   target_group_arns   = [aws_lb_target_group.api.arn]
 
   enabled_metrics = [
@@ -261,8 +285,8 @@ resource "aws_security_group" "api_instances" {
   vpc_id      = data.aws_vpc.default.id
 
   ingress {
-    from_port       = 3000
-    to_port         = 3000
+    from_port       = 8080
+    to_port         = 8080
     protocol        = "tcp"
     security_groups = [aws_security_group.alb.id]
     description     = "API port from ALB"
@@ -289,25 +313,9 @@ resource "aws_security_group" "api_instances" {
   }
 }
 
-# Data sources for default VPC and subnets
-data "aws_vpc" "default" {
-  default = true
-}
-
 data "aws_subnets" "default" {
   filter {
     name   = "vpc-id"
     values = [data.aws_vpc.default.id]
   }
-}
-
-# Output ALB DNS
-output "alb_dns_name" {
-  value       = aws_lb.api.dns_name
-  description = "DNS name of the Application Load Balancer"
-}
-
-output "api_endpoint" {
-  value       = "http://${aws_lb.api.dns_name}"
-  description = "API endpoint URL"
 }
