@@ -14,7 +14,7 @@ env:
 jobs:
   build-and-push:
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main'
+    # if: github.ref == 'refs/heads/main'
 
     steps:
       - name: Checkout code
@@ -133,12 +133,7 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
 
-      # Frontend to S3
-      - name: Upload frontend to S3
-        run: |
-          aws s3 sync front/dist s3://${{ secrets.S3_BUCKET_NAME }} --delete
-
-      # Upload built frontend to S3
+      # Upload frontend to S3
       - name: Upload frontend to S3
         run: |
           echo "Uploading frontend to S3..."
