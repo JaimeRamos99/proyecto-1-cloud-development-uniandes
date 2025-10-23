@@ -142,11 +142,22 @@ jobs:
       # Refresh API Auto Scaling Group
       - name: Refresh Auto Scaling Group for API
         run: |
-          echo "Triggering ASG instance refresh for API..."
-          aws autoscaling start-instance-refresh \
+          # Check current refresh status
+          STATUS=$(aws autoscaling describe-instance-refreshes \
             --auto-scaling-group-name proyecto1-api-asg \
             --region ${{ env.AWS_REGION }} \
-            --preferences '{"MinHealthyPercentage": 90, "InstanceWarmup": 120}'
+            --query 'InstanceRefreshes[0].Status' \
+            --output text)
+          
+          if [ "$STATUS" == "InProgress" ] || [ "$STATUS" == "Pending" ]; then
+            echo "Instance refresh already in progress (Status: $STATUS). Skipping..."
+          else
+            echo "Starting new instance refresh..."
+            aws autoscaling start-instance-refresh \
+              --auto-scaling-group-name proyecto1-api-asg \
+              --region ${{ env.AWS_REGION }} \
+              --preferences '{"MinHealthyPercentage": 90, "InstanceWarmup": 120}'
+          fi
 
       # - name: Restart Worker
       #   run: |
