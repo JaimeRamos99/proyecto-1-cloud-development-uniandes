@@ -133,68 +133,25 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
 
-      - name: Deploy to Web Server
+      # Frontend to S3
+      - name: Upload frontend to S3
         run: |
-          # Create SSH key file
-          echo "${{ secrets.SSH_PRIVATE_KEY }}" > key.pem
-          chmod 400 key.pem
-
-          # Copy nginx config
-          scp -i key.pem -o StrictHostKeyChecking=no \
-            nginx/nginx.aws.conf ec2-user@${{ secrets.WEB_SERVER_IP }}:~/proyecto1/
-
-          # Frontend to S3
-          - name: Upload frontend to S3
-          run: |
           aws s3 sync front/dist s3://${{ secrets.S3_BUCKET_NAME }} --delete
 
-          # Restart API container with new image
-          ssh -i key.pem -o StrictHostKeyChecking=no \
-            ec2-user@${{ secrets.WEB_SERVER_IP }} << 'ENDSSH'
-            # Login to ECR
-            aws ecr get-login-password --region ${{ env.AWS_REGION }} | sudo docker login --username AWS --password-stdin ${{ secrets.ECR_REGISTRY }}
-            
-            # Stop and remove existing API container
-            sudo docker stop proyecto1-api-aws || true
-            sudo docker rm proyecto1-api-aws || true
-            
-            # Pull latest image
-            sudo docker pull ${{ secrets.ECR_REGISTRY }}/${{ env.ECR_API_REPO }}:latest
-            
-            # Start new API container
-            sudo docker run -d --name proyecto1-api-aws --restart unless-stopped \
-              --network host \
-              -e DB_HOST=${{ secrets.RDS_ENDPOINT }} \
-              -e DB_PORT=5432 \
-              -e DB_NAME=proyecto_1 \
-              -e DB_USER=postgres \
-              -e DB_PASSWORD=${{ secrets.DB_PASSWORD }} \
-              -e DB_SSL_MODE=require \
-              -e S3_BUCKET_NAME=${{ secrets.S3_BUCKET_NAME }} \
-              -e SQS_QUEUE_NAME=${{ secrets.SQS_QUEUE_NAME }} \
-              -e JWT_SECRET=${{ secrets.JWT_SECRET }} \
-              -e AWS_DEFAULT_REGION=us-east-1 \
-              ${{ secrets.ECR_REGISTRY }}/${{ env.ECR_API_REPO }}:latest
-            
-            # Restart frontend container
-            sudo docker stop proyecto1-frontend-aws || true
-            sudo docker rm proyecto1-frontend-aws || true
-            sudo docker pull ${{ secrets.ECR_REGISTRY }}/${{ env.ECR_FRONTEND_REPO }}:latest
-            sudo docker run -d --name proyecto1-frontend-aws --restart unless-stopped \
-              --network host \
-              ${{ secrets.ECR_REGISTRY }}/${{ env.ECR_FRONTEND_REPO }}:latest
-            
-            # Restart nginx container
-            sudo docker stop proyecto1-nginx-aws || true
-            sudo docker rm proyecto1-nginx-aws || true
-            sudo docker run -d --name proyecto1-nginx-aws --restart unless-stopped \
-              --network host \
-              -v /home/ec2-user/proyecto1/nginx.aws.conf:/etc/nginx/nginx.conf:ro \
-              nginx:alpine
-            
-            # Show running containers
-            sudo docker ps
-          ENDSSH
+      # Upload built frontend to S3
+      - name: Upload frontend to S3
+        run: |
+          echo "Uploading frontend to S3..."
+          aws s3 sync front/dist s3://${{ secrets.S3_BUCKET_NAME }} --delete
+
+      # Refresh API Auto Scaling Group
+      - name: Refresh Auto Scaling Group for API
+        run: |
+          echo "Triggering ASG instance refresh for API..."
+          aws autoscaling start-instance-refresh \
+            --auto-scaling-group-name proyecto1-api-asg \
+            --region ${{ env.AWS_REGION }} \
+            --preferences '{"MinHealthyPercentage": 90, "InstanceWarmup": 120}'
 
       - name: Restart Worker
         run: |

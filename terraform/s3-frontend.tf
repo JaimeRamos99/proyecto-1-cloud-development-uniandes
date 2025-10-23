@@ -27,10 +27,6 @@ resource "aws_s3_bucket_website_configuration" "frontend" {
   index_document {
     suffix = "index.html"
   }
-
-  error_document {
-    key = "error.html"
-  }
 }
 
 # S3 Bucket Policy for Public Read Access
