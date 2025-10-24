@@ -1628,6 +1628,8 @@ const App = () => {
   );
 
   const SimpleVideoView = ({ video, onBack, onVote, hasVoted }) => {
+    const videoUrl = video.video_url || apiService.getVideoStreamUrl(video.video_id);
+
     return (
       <div className="min-h-screen bg-gray-50 p-4">
         <div className="max-w-4xl mx-auto">
@@ -1644,9 +1646,18 @@ const App = () => {
           <div className="bg-white rounded-2xl shadow-xl overflow-hidden">
             {/* Video Container */}
             <div className="relative bg-black">
-              <video controls autoPlay className="w-full h-auto max-h-[70vh] object-contain">
-                <source src={apiService.getVideoUrl(video)} type="video/mp4" />
-                Tu navegador no soporta el elemento de video.
+              <video
+                className="w-full h-auto max-h-[70vh] object-contain"
+                controls
+                autoPlay
+                poster="/api/placeholder/800/450"
+              >
+                <source 
+                  src={videoUrl} 
+                  type="video/mp4" 
+                />
+                  Tu navegador no soporta el elemento de video.
+                
               </video>
 
             </div>
@@ -1736,6 +1747,8 @@ const App = () => {
     
     // Simple click handler - just navigate to expanded view
     const handleVideoClick = () => {
+      console.log("Clicked video:", video.video_id, video.status);
+
       if (video.status === 'processed') {
         setExpandedVideo(video);
         setCurrentView('video-expanded');
@@ -1744,6 +1757,8 @@ const App = () => {
     
     const handleVote = async (e) => {
       e.stopPropagation(); // Prevent opening video
+      console.log("Vote click:", video.video_id);
+
       if (!voted && video.status === 'processed' && user) {
         try {
           await apiService.voteVideo(video.video_id);
@@ -1878,6 +1893,8 @@ const App = () => {
       {currentView === 'rankings' && <Rankings />}
       {currentView === 'profile' && user && <Profile />}
       {currentView === 'video-expanded' && expandedVideo && (
+        console.log("Rendering SimpleVideoView", { expandedVideo, user }) ||
+
         <SimpleVideoView
           video={expandedVideo}
           onBack={() => setCurrentView('videos')}
@@ -1885,7 +1902,7 @@ const App = () => {
           hasVoted={votedVideos.has(expandedVideo.video_id)}
         />
       )}
-      {!user && currentView !== 'landing' && currentView !== 'login' && currentView !== 'rankings' && currentView !== 'videos' && (
+      {!user && currentView !== 'landing' && currentView !== 'login' && currentView !== 'rankings' && currentView !== 'videos' && currentView !== 'video-expanded' && (
         <div className="min-h-screen flex items-center justify-center">
           <div className="bg-white rounded-xl shadow-lg p-8 text-center max-w-md">
             <Shield className="w-16 h-16 mx-auto text-gray-400 mb-4" />

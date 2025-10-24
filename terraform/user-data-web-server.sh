@@ -29,6 +29,10 @@ curl -L "https://github.com/docker/compose/releases/latest/download/docker-compo
 chmod +x /usr/local/bin/docker-compose
 ln -sf /usr/local/bin/docker-compose /usr/bin/docker-compose
 
+# --- Install unzip (required for AWS CLI installation) ---
+echo "Installing unzip..."
+dnf install -y unzip
+
 # --- Install AWS CLI v2 ---
 echo "Installing AWS CLI..."
 curl -s "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
@@ -43,15 +47,31 @@ cd /home/ec2-user/proyecto1
 # --- Create Nginx config ---
 cat > nginx.aws.conf << 'EOF'
 events {}
+
 http {
-  server {
-    listen 80;
-    location / {
-      proxy_pass http://localhost:8080;
+    server {
+        listen 80;
+
+        # Proxy all /api/* requests to the API container
+        location /api/ {
+            proxy_pass http://localhost:8080/;
+            proxy_http_version 1.1;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+        }
+
+        # Health check endpoint
+        location = /api/health {
+            access_log off;
+            proxy_pass http://localhost:8080/health;
+            proxy_http_version 1.1;
+        }
     }
-  }
 }
 EOF
+
 
 # --- Create Docker Compose file ---
 cat > docker-compose.yml << EOF

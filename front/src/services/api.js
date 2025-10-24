@@ -1,4 +1,5 @@
-const BASE_URL = "http://13.223.138.92";
+const BASE_URL = window?.APP_CONFIG?.API_BASE_URL || 
+  "http://proyecto1-api-alb-536673897.us-east-1.elb.amazonaws.com";
 
 class ApiService {
   constructor() {
@@ -20,8 +21,9 @@ class ApiService {
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
-    console.log("🔑 Using token:", token);
     console.log("📡 Headers:", config.headers);
+    console.log("Using token:", token);
+
 
     try {
       const response = await fetch(url, config);
@@ -134,12 +136,12 @@ class ApiService {
 
   async getMyVideos() {
     console.log("📹 Fetching my videos...");
-    const result = await this.request("/api/videos/");
+    const result = await this.request("/api/videos");
     return Array.isArray(result) ? result : [];
   }
 
   async getPublicVideos() {
-    const result = await this.request("/api/public/videos/");
+    const result = await this.request("/api/public/videos");
     console.log(" Public Videos Result:", result);
     return Array.isArray(result) ? result : [];
   }

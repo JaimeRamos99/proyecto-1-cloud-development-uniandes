@@ -1,6 +1,8 @@
 package http
 
 import (
+	"github.com/gin-contrib/cors"
+
 	"proyecto1/root/internal/auth"
 	"proyecto1/root/internal/config"
 	"proyecto1/root/internal/database"
@@ -15,8 +17,13 @@ func NewRouter(cfg *config.Config, db *database.DB) *gin.Engine {
 	router := gin.New()
 	router.Use(gin.Logger(), gin.Recovery())
 
-	// CORS is handled entirely by nginx reverse proxy
-	// All requests come through nginx, so no CORS configuration needed here
+	router.Use(cors.New(cors.Config{
+		AllowAllOrigins:  true,  // ONLY FOR TESTING!
+		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
+		AllowHeaders:     []string{"Origin", "Content-Type", "Authorization"},
+		ExposeHeaders:    []string{"Content-Length"},
+		AllowCredentials: true,
+	}))
 
 	// Initialize shared session store for token revocation
 	sessionStore := session.NewInMemorySessionStore()
@@ -68,6 +75,11 @@ func NewRouter(cfg *config.Config, db *database.DB) *gin.Engine {
 			// Rankings endpoints (no authentication required)
 			public.GET("/rankings", rankingHandler.GetPlayerRankings)
 		}
+
+		router.GET("/", func(c *gin.Context) {
+			c.JSON(200, gin.H{"message": "Backend API running"})
+		})
+
 	}
 
 	return router

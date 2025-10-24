@@ -20,7 +20,7 @@ resource "aws_lb" "api" {
 
 # ALB Target Group
 resource "aws_lb_target_group" "api" {
-  name     = "${var.project_name}-api-tg"
+  name = "${var.project_name}-api-tg"
   port     = 8080
   protocol = "HTTP"
   vpc_id   = data.aws_vpc.default.id
@@ -31,8 +31,9 @@ resource "aws_lb_target_group" "api" {
     unhealthy_threshold = 2
     timeout             = 5
     interval            = 30
-    path                = "/health"  # Make sure your API has this endpoint
+    path                = "/api/health"  
     matcher             = "200"
+    port                = "8080"     
   }
 
   deregistration_delay = 30
@@ -41,6 +42,10 @@ resource "aws_lb_target_group" "api" {
     type            = "lb_cookie"
     cookie_duration = 86400
     enabled         = true
+  }
+
+  lifecycle {
+    create_before_destroy = true
   }
 
   tags = {

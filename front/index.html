@@ -2,12 +2,19 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <link rel="icon" type="image/svg+xml" href="/Basketball.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>ANB</title>
   </head>
   <body>
     <div id="root"></div>
+
+    <script>
+      window.APP_CONFIG = {
+        API_BASE_URL: "http://proyecto1-api-alb-536673897.us-east-1.elb.amazonaws.com",
+      };
+    </script>
+
     <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>
