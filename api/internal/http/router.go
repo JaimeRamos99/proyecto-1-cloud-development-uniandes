@@ -2,6 +2,7 @@ package http
 
 import (
 	"github.com/gin-contrib/cors"
+	"github.com/gin-gonic/gin"
 
 	"proyecto1/root/internal/auth"
 	"proyecto1/root/internal/config"
@@ -9,8 +10,6 @@ import (
 	"proyecto1/root/internal/http/handlers"
 	"proyecto1/root/internal/http/middlewares"
 	"proyecto1/root/internal/http/session"
-
-	"github.com/gin-gonic/gin"
 )
 
 func NewRouter(cfg *config.Config, db *database.DB) *gin.Engine {
@@ -18,7 +17,7 @@ func NewRouter(cfg *config.Config, db *database.DB) *gin.Engine {
 	router.Use(gin.Logger(), gin.Recovery())
 
 	router.Use(cors.New(cors.Config{
-		AllowAllOrigins:  true,  // ONLY FOR TESTING!
+		AllowAllOrigins:  true, // ONLY FOR TESTING!
 		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
 		AllowHeaders:     []string{"Origin", "Content-Type", "Authorization"},
 		ExposeHeaders:    []string{"Content-Length"},
@@ -75,12 +74,11 @@ func NewRouter(cfg *config.Config, db *database.DB) *gin.Engine {
 			// Rankings endpoints (no authentication required)
 			public.GET("/rankings", rankingHandler.GetPlayerRankings)
 		}
-
-		router.GET("/", func(c *gin.Context) {
-			c.JSON(200, gin.H{"message": "Backend API running"})
-		})
-
 	}
+
+	router.GET("/", func(c *gin.Context) {
+		c.JSON(200, gin.H{"message": "Backend API running"})
+	})
 
 	return router
 }
