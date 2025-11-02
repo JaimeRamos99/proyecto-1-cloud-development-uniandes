@@ -49,26 +49,27 @@ cat > nginx.aws.conf << 'EOF'
 events {}
 
 http {
-    server {
-        listen 80;
+  server {
+    listen 80;
 
-        # Proxy all /api/* requests to the API container
-        location /api/ {
-            proxy_pass http://localhost:8080/;
-            proxy_http_version 1.1;
-            proxy_set_header Host $host;
-            proxy_set_header X-Real-IP $remote_addr;
-            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-            proxy_set_header X-Forwarded-Proto $scheme;
-        }
-
-        # Health check endpoint
-        location = /api/health {
-            access_log off;
-            proxy_pass http://localhost:8080/health;
-            proxy_http_version 1.1;
-        }
+    # Proxy all /api/* requests to the API service through the ALB
+    location /api/ {
+        proxy_pass http://proyecto1-api-alb-536673897.us-east-1.elb.amazonaws.com/;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
     }
+
+    # Health check endpoint
+    location = /api/health {
+        access_log off;
+        proxy_pass http://proyecto1-api-alb-536673897.us-east-1.elb.amazonaws.com/api/health;
+        proxy_http_version 1.1;
+    }
+  }
+
 }
 EOF
 

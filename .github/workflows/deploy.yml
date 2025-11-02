@@ -194,6 +194,8 @@ jobs:
       - name: Health Check
         run: |
           sleep 30
+          echo ${{ secrets.WEB_SERVER_IP }}
+          curl -f http://proyecto1-api-alb-536673897.us-east-1.elb.amazonaws.com/api/health || exit 1
           echo "Checking API health through nginx..."
           curl -f http://${{ secrets.WEB_SERVER_IP }}/api/health || exit 1
           echo "Checking Frontend..."
