@@ -110,6 +110,12 @@ systemctl enable ${project_name}-worker.service || echo "Failed to enable servic
 # Try to start the service (will fail if image not pushed yet)
 systemctl start ${project_name}-worker.service || echo "Worker service will start once image is pushed"
 
+# Ensure SSM agent is running (should be pre-installed on Amazon Linux 2023)
+echo "Ensuring SSM agent is running..."
+systemctl enable amazon-ssm-agent || true
+systemctl start amazon-ssm-agent || true
+systemctl status amazon-ssm-agent || echo "SSM agent status check failed, but continuing..."
+
 echo "==================================="
 echo "Worker Initialization Complete"
 echo "==================================="

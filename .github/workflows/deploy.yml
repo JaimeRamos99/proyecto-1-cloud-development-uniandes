@@ -320,35 +320,98 @@ jobs:
 
       - name: Restart Worker
         run: |
-          ssh -i key.pem -o StrictHostKeyChecking=no \
-            ec2-user@${{ secrets.WORKER_IP }} << 'ENDSSH'
-            # Login to ECR
-            aws ecr get-login-password --region ${{ env.AWS_REGION }} | sudo docker login --username AWS --password-stdin ${{ secrets.ECR_REGISTRY }}
-            
-            # Stop and remove existing worker container
-            sudo docker stop proyecto1-worker-aws || true
-            sudo docker rm proyecto1-worker-aws || true
-            
-            # Pull latest image
-            sudo docker pull ${{ secrets.ECR_REGISTRY }}/${{ env.ECR_WORKER_REPO }}:latest
-            
-            # Start new worker container with fixed AWS credentials
-            sudo docker run -d --name proyecto1-worker-aws --restart unless-stopped \
-              --network host \
-              -e DB_HOST=${{ secrets.RDS_ENDPOINT }} \
-              -e DB_PORT=5432 \
-              -e DB_NAME=proyecto_1 \
-              -e DB_USER=postgres \
-              -e DB_PASSWORD=${{ secrets.DB_PASSWORD }} \
-              -e DB_SSL_MODE=require \
-              -e S3_BUCKET_NAME=${{ secrets.S3_BUCKET_NAME }} \
-              -e SQS_QUEUE_NAME=${{ secrets.SQS_QUEUE_NAME }} \
-              -e AWS_DEFAULT_REGION=us-east-1 \
-              ${{ secrets.ECR_REGISTRY }}/${{ env.ECR_WORKER_REPO }}:latest
-            
-            # Show running containers
-            sudo docker ps
-          ENDSSH
+          # Get worker instance ID by tag
+          echo "Finding worker instance..."
+          WORKER_INSTANCE_ID=$(aws ec2 describe-instances \
+            --filters "Name=tag:Name,Values=proyecto1-worker" "Name=instance-state-name,Values=running" \
+            --region ${{ env.AWS_REGION }} \
+            --query 'Reservations[0].Instances[0].InstanceId' \
+            --output text)
+          
+          if [ -z "$WORKER_INSTANCE_ID" ] || [ "$WORKER_INSTANCE_ID" = "None" ]; then
+            echo "❌ Worker instance not found"
+            exit 1
+          fi
+          
+          echo "Found worker instance: $WORKER_INSTANCE_ID"
+          
+          # Wait for instance to be ready for SSM
+          echo "Waiting for worker instance to be ready for SSM..."
+          MAX_WAIT=300  # 5 minutes
+          WAIT_COUNT=0
+          while [ $WAIT_COUNT -lt $MAX_WAIT ]; do
+            if aws ssm describe-instance-information \
+              --filters "Key=InstanceIds,Values=$WORKER_INSTANCE_ID" \
+              --region ${{ env.AWS_REGION }} \
+              --query 'InstanceInformationList[0].PingStatus' \
+              --output text 2>/dev/null | grep -q "Online"; then
+              echo "✅ Worker instance is ready for SSM"
+              break
+            else
+              WAIT_COUNT=$((WAIT_COUNT + 10))
+              if [ $WAIT_COUNT -lt $MAX_WAIT ]; then
+                echo "⏳ Waiting for SSM agent to be ready... ($WAIT_COUNT/$MAX_WAIT seconds)"
+                sleep 10
+              else
+                echo "❌ Worker instance did not become ready for SSM within $MAX_WAIT seconds"
+                exit 1
+              fi
+            fi
+          done
+          
+          # Create temporary file for SSM parameters
+          WORKER_PARAMS_FILE=$(mktemp)
+          jq -n \
+            --arg cmd1 "aws ecr get-login-password --region ${{ env.AWS_REGION }} | sudo docker login --username AWS --password-stdin ${{ secrets.ECR_REGISTRY }}" \
+            --arg cmd2 "sudo docker stop proyecto1-worker-aws || true" \
+            --arg cmd3 "sudo docker rm proyecto1-worker-aws || true" \
+            --arg cmd4 "sudo docker pull ${{ secrets.ECR_REGISTRY }}/${{ env.ECR_WORKER_REPO }}:latest" \
+            --arg cmd5 "sudo docker run -d --name proyecto1-worker-aws --restart unless-stopped --network host -e DB_HOST=${{ secrets.RDS_ENDPOINT }} -e DB_PORT=5432 -e DB_NAME=proyecto_1 -e DB_USER=postgres -e DB_PASSWORD=${{ secrets.DB_PASSWORD }} -e DB_SSL_MODE=require -e S3_BUCKET_NAME=${{ secrets.S3_BUCKET_NAME }} -e SQS_QUEUE_NAME=${{ secrets.SQS_QUEUE_NAME }} -e AWS_DEFAULT_REGION=${{ env.AWS_REGION }} ${{ secrets.ECR_REGISTRY }}/${{ env.ECR_WORKER_REPO }}:latest" \
+            --arg cmd6 "sudo docker ps" \
+            '{commands: [$cmd1, $cmd2, $cmd3, $cmd4, $cmd5, $cmd6]}' > "$WORKER_PARAMS_FILE"
+          
+          # Send restart command via SSM
+          echo "Restarting worker via SSM..."
+          WORKER_COMMAND_ID=$(aws ssm send-command \
+            --instance-ids "$WORKER_INSTANCE_ID" \
+            --document-name "AWS-RunShellScript" \
+            --parameters file://"$WORKER_PARAMS_FILE" \
+            --region ${{ env.AWS_REGION }} \
+            --query 'Command.CommandId' \
+            --output text)
+          
+          # Clean up temp file
+          rm -f "$WORKER_PARAMS_FILE"
+          
+          echo "Worker command ID: $WORKER_COMMAND_ID"
+          
+          # Wait for command to complete
+          echo "Waiting for worker restart to complete..."
+          aws ssm wait command-executed \
+            --command-id "$WORKER_COMMAND_ID" \
+            --instance-id "$WORKER_INSTANCE_ID" \
+            --region ${{ env.AWS_REGION }} || true
+          
+          # Check command status
+          WORKER_STATUS=$(aws ssm get-command-invocation \
+            --command-id "$WORKER_COMMAND_ID" \
+            --instance-id "$WORKER_INSTANCE_ID" \
+            --region ${{ env.AWS_REGION }} \
+            --query 'Status' \
+            --output text)
+          
+          if [ "$WORKER_STATUS" != "Success" ]; then
+            echo "❌ Worker restart failed with status: $WORKER_STATUS"
+            aws ssm get-command-invocation \
+              --command-id "$WORKER_COMMAND_ID" \
+              --instance-id "$WORKER_INSTANCE_ID" \
+              --region ${{ env.AWS_REGION }} \
+              --query 'StandardErrorContent' \
+              --output text
+            exit 1
+          else
+            echo "✅ Worker restarted successfully"
+          fi
 
       - name: Health Check
         run: |
