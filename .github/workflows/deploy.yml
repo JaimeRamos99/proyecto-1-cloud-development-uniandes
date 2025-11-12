@@ -174,53 +174,91 @@ jobs:
             echo "Uploading nginx config..."
             # Base64 encode the nginx config file
             NGINX_B64=$(cat nginx/nginx.aws.conf | base64 -w 0)
-            # Upload using SSM - write base64 content to file, then decode
+            
+            # Create temporary file for SSM parameters (using file:// to avoid shell escaping issues)
+            NGINX_PARAMS_FILE=$(mktemp)
+            # Use jq to safely construct JSON - jq will properly escape the base64 content
+            jq -n \
+              --arg cmd1 "mkdir -p /home/ec2-user/proyecto1" \
+              --arg cmd2 "echo '$NGINX_B64' | base64 -d > /home/ec2-user/proyecto1/nginx.aws.conf" \
+              --arg cmd3 "chmod 644 /home/ec2-user/proyecto1/nginx.aws.conf" \
+              --arg cmd4 "test -f /home/ec2-user/proyecto1/nginx.aws.conf && echo 'Nginx config uploaded successfully' || echo 'Nginx config upload failed'" \
+              '{commands: [$cmd1, $cmd2, $cmd3, $cmd4]}' > "$NGINX_PARAMS_FILE"
+            
+            # Upload nginx config using SSM with base64 content embedded
             NGINX_UPLOAD_CMD_ID=$(aws ssm send-command \
               --instance-ids "$INSTANCE_ID" \
               --document-name "AWS-RunShellScript" \
-              --parameters "commands=[
-                'mkdir -p /home/ec2-user/proyecto1',
-                'echo \"$NGINX_B64\" | base64 -d > /home/ec2-user/proyecto1/nginx.aws.conf',
-                'chmod 644 /home/ec2-user/proyecto1/nginx.aws.conf'
-              ]" \
-              --parameters "environment=[\"NGINX_B64=$NGINX_B64\"]" \
+              --parameters file://"$NGINX_PARAMS_FILE" \
               --region ${{ env.AWS_REGION }} \
               --query 'Command.CommandId' \
               --output text)
             
+            # Clean up temp file
+            rm -f "$NGINX_PARAMS_FILE"
+            
             # Wait for nginx config upload to complete
             if [ -n "$NGINX_UPLOAD_CMD_ID" ]; then
+              echo "Waiting for nginx config upload..."
               aws ssm wait command-executed \
                 --command-id "$NGINX_UPLOAD_CMD_ID" \
                 --instance-id "$INSTANCE_ID" \
                 --region ${{ env.AWS_REGION }} || echo "Warning: Nginx config upload may have failed"
+              
+              # Verify upload succeeded
+              UPLOAD_STATUS=$(aws ssm get-command-invocation \
+                --command-id "$NGINX_UPLOAD_CMD_ID" \
+                --instance-id "$INSTANCE_ID" \
+                --region ${{ env.AWS_REGION }} \
+                --query 'Status' \
+                --output text)
+              
+              if [ "$UPLOAD_STATUS" != "Success" ]; then
+                echo "⚠️  Nginx config upload failed, but continuing deployment..."
+                aws ssm get-command-invocation \
+                  --command-id "$NGINX_UPLOAD_CMD_ID" \
+                  --instance-id "$INSTANCE_ID" \
+                  --region ${{ env.AWS_REGION }} \
+                  --query 'StandardErrorContent' \
+                  --output text || true
+              else
+                echo "✅ Nginx config uploaded successfully"
+              fi
             fi
             
             # Send deployment command via SSM
+            # Create temporary file for SSM parameters (using file:// to avoid shell escaping issues)
+            DEPLOY_PARAMS_FILE=$(mktemp)
+            # Build parameters JSON using jq
+            jq -n \
+              --arg cmd1 "set -e" \
+              --arg cmd2 "aws ecr get-login-password --region ${{ env.AWS_REGION }} | sudo docker login --username AWS --password-stdin ${{ secrets.ECR_REGISTRY }}" \
+              --arg cmd3 "sudo docker stop proyecto1-api-aws || true" \
+              --arg cmd4 "sudo docker rm proyecto1-api-aws || true" \
+              --arg cmd5 "sudo docker pull ${{ secrets.ECR_REGISTRY }}/${{ env.ECR_API_REPO }}:latest" \
+              --arg cmd6 "sudo docker run -d --name proyecto1-api-aws --restart unless-stopped --network host -e DB_HOST=${{ secrets.RDS_ENDPOINT }} -e DB_PORT=5432 -e DB_NAME=proyecto_1 -e DB_USER=postgres -e DB_PASSWORD=${{ secrets.DB_PASSWORD }} -e DB_SSL_MODE=require -e S3_BUCKET_NAME=${{ secrets.S3_BUCKET_NAME }} -e SQS_QUEUE_NAME=${{ secrets.SQS_QUEUE_NAME }} -e JWT_SECRET=${{ secrets.JWT_SECRET }} -e AWS_DEFAULT_REGION=${{ env.AWS_REGION }} ${{ secrets.ECR_REGISTRY }}/${{ env.ECR_API_REPO }}:latest" \
+              --arg cmd7 "sudo docker stop proyecto1-frontend-aws || true" \
+              --arg cmd8 "sudo docker rm proyecto1-frontend-aws || true" \
+              --arg cmd9 "sudo docker pull ${{ secrets.ECR_REGISTRY }}/${{ env.ECR_FRONTEND_REPO }}:latest" \
+              --arg cmd10 "sudo docker run -d --name proyecto1-frontend-aws --restart unless-stopped --network host ${{ secrets.ECR_REGISTRY }}/${{ env.ECR_FRONTEND_REPO }}:latest" \
+              --arg cmd11 "sudo docker stop proyecto1-nginx-aws || true" \
+              --arg cmd12 "sudo docker rm proyecto1-nginx-aws || true" \
+              --arg cmd13 "sudo docker run -d --name proyecto1-nginx-aws --restart unless-stopped --network host -v /home/ec2-user/proyecto1/nginx.aws.conf:/etc/nginx/nginx.conf:ro nginx:alpine" \
+              --arg cmd14 "sudo docker ps" \
+              --arg timeout "3600" \
+              --arg workdir "/home/ec2-user" \
+              '{commands: [$cmd1, $cmd2, $cmd3, $cmd4, $cmd5, $cmd6, $cmd7, $cmd8, $cmd9, $cmd10, $cmd11, $cmd12, $cmd13, $cmd14], executionTimeout: [$timeout], workingDirectory: [$workdir]}' > "$DEPLOY_PARAMS_FILE"
+            
             COMMAND_ID=$(aws ssm send-command \
               --instance-ids "$INSTANCE_ID" \
               --document-name "AWS-RunShellScript" \
-              --parameters "commands=[
-                'set -e',
-                'aws ecr get-login-password --region ${{ env.AWS_REGION }} | sudo docker login --username AWS --password-stdin ${{ secrets.ECR_REGISTRY }}',
-                'sudo docker stop proyecto1-api-aws || true',
-                'sudo docker rm proyecto1-api-aws || true',
-                'sudo docker pull ${{ secrets.ECR_REGISTRY }}/${{ env.ECR_API_REPO }}:latest',
-                'sudo docker run -d --name proyecto1-api-aws --restart unless-stopped --network host -e DB_HOST=${{ secrets.RDS_ENDPOINT }} -e DB_PORT=5432 -e DB_NAME=proyecto_1 -e DB_USER=postgres -e DB_PASSWORD=${{ secrets.DB_PASSWORD }} -e DB_SSL_MODE=require -e S3_BUCKET_NAME=${{ secrets.S3_BUCKET_NAME }} -e SQS_QUEUE_NAME=${{ secrets.SQS_QUEUE_NAME }} -e JWT_SECRET=${{ secrets.JWT_SECRET }} -e AWS_DEFAULT_REGION=${{ env.AWS_REGION }} ${{ secrets.ECR_REGISTRY }}/${{ env.ECR_API_REPO }}:latest',
-                'sudo docker stop proyecto1-frontend-aws || true',
-                'sudo docker rm proyecto1-frontend-aws || true',
-                'sudo docker pull ${{ secrets.ECR_REGISTRY }}/${{ env.ECR_FRONTEND_REPO }}:latest',
-                'sudo docker run -d --name proyecto1-frontend-aws --restart unless-stopped --network host ${{ secrets.ECR_REGISTRY }}/${{ env.ECR_FRONTEND_REPO }}:latest',
-                'sudo docker stop proyecto1-nginx-aws || true',
-                'sudo docker rm proyecto1-nginx-aws || true',
-                'sudo docker run -d --name proyecto1-nginx-aws --restart unless-stopped --network host -v /home/ec2-user/proyecto1/nginx.aws.conf:/etc/nginx/nginx.conf:ro nginx:alpine',
-                'sudo docker ps'
-              ]" \
-              --parameters "executionTimeout=['3600']" \
-              --parameters "workingDirectory=['/home/ec2-user']" \
+              --parameters file://"$DEPLOY_PARAMS_FILE" \
               --region ${{ env.AWS_REGION }} \
               --query 'Command.CommandId' \
               --output text)
+            
+            # Clean up temp file
+            rm -f "$DEPLOY_PARAMS_FILE"
             
             echo "Command ID: $COMMAND_ID"
             
