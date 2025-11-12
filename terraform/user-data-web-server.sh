@@ -128,12 +128,6 @@ mkdir -p /home/ec2-user/.aws
 # The EC2 instance already has IAM role attached, so we just need to ensure the directory exists
 # The AWS SDK will automatically use the instance profile
 
-# Ensure SSM agent is running (should be pre-installed on Amazon Linux 2023)
-echo "Ensuring SSM agent is running..."
-systemctl enable amazon-ssm-agent || true
-systemctl start amazon-ssm-agent || true
-systemctl status amazon-ssm-agent || echo "SSM agent status check failed, but continuing..."
-
 # Note: Images need to be built and pushed before this will work
 # The containers will be started manually after deployment
 
