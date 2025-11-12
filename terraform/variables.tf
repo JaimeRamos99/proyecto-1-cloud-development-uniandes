@@ -125,6 +125,25 @@ variable "ecr_image_tag" {
   default     = "latest"
 }
 
+# Auto Scaling Group Configuration
+variable "web_server_asg_min_size" {
+  description = "Minimum number of instances in the Auto Scaling Group"
+  type        = number
+  default     = 1
+}
+
+variable "web_server_asg_max_size" {
+  description = "Maximum number of instances in the Auto Scaling Group"
+  type        = number
+  default     = 3
+}
+
+variable "web_server_asg_desired_capacity" {
+  description = "Desired number of instances in the Auto Scaling Group"
+  type        = number
+  default     = 1
+}
+
 # Tags
 variable "additional_tags" {
   description = "Additional tags to apply to all resources"

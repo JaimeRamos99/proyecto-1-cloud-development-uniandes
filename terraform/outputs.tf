@@ -1,15 +1,21 @@
 # Proyecto_1 - Terraform Outputs
 # Export important information about the infrastructure
 
-# EC2 Instances
-output "web_server_public_ip" {
-  description = "Public IP address of the web server"
-  value       = aws_eip.web_server.public_ip
+# Application Load Balancer
+output "alb_dns_name" {
+  description = "DNS name of the Application Load Balancer"
+  value       = aws_lb.web_server.dns_name
 }
 
-output "web_server_private_ip" {
-  description = "Private IP address of the web server"
-  value       = aws_instance.web_server.private_ip
+output "alb_zone_id" {
+  description = "Zone ID of the Application Load Balancer"
+  value       = aws_lb.web_server.zone_id
+}
+
+# Auto Scaling Group
+output "web_server_asg_id" {
+  description = "ID of the Auto Scaling Group"
+  value       = aws_autoscaling_group.web_server.id
 }
 
 output "worker_public_ip" {
@@ -110,9 +116,10 @@ output "aws_region" {
 }
 
 # SSH Commands
-output "ssh_web_server" {
-  description = "SSH command for web server"
-  value       = "ssh -i ~/.ssh/${var.key_pair_name}.pem ec2-user@${aws_eip.web_server.public_ip}"
+# Note: With ASG, instances have dynamic IPs. Use AWS Systems Manager Session Manager instead.
+output "ssh_web_server_note" {
+  description = "Note about accessing web server instances"
+  value       = "Use AWS Systems Manager Session Manager to access instances. Instances are managed by ASG: ${aws_autoscaling_group.web_server.id}"
 }
 
 output "ssh_worker" {
@@ -122,8 +129,8 @@ output "ssh_worker" {
 
 # Application URL
 output "application_url" {
-  description = "Application URL"
-  value       = "http://${aws_eip.web_server.public_ip}"
+  description = "Application URL (via Application Load Balancer)"
+  value       = "http://${aws_lb.web_server.dns_name}"
 }
 
 # Deployment Summary
@@ -138,11 +145,13 @@ output "deployment_summary" {
     📍 Region: ${var.aws_region}
     🏷️  Environment: ${var.environment}
     
-    🌐 Web Server
-    ├─ Public IP:  ${aws_eip.web_server.public_ip}
-    ├─ Private IP: ${aws_instance.web_server.private_ip}
-    ├─ Instance:   ${aws_instance.web_server.instance_type}
-    └─ SSH:        ssh -i ~/.ssh/${var.key_pair_name}.pem ec2-user@${aws_eip.web_server.public_ip}
+    🌐 Web Server (Auto Scaling Group)
+    ├─ ALB DNS:    ${aws_lb.web_server.dns_name}
+    ├─ ASG ID:     ${aws_autoscaling_group.web_server.id}
+    ├─ Min Size:   ${var.web_server_asg_min_size}
+    ├─ Max Size:   ${var.web_server_asg_max_size}
+    ├─ Desired:    ${var.web_server_asg_desired_capacity}
+    └─ Access:     Use AWS Systems Manager Session Manager
     
     ⚙️  Worker
     ├─ Public IP:  ${aws_instance.worker.public_ip}
@@ -169,7 +178,7 @@ output "deployment_summary" {
     └─ Worker:     ${aws_ecr_repository.worker.repository_url}
     
     🌐 Application
-    └─ URL:        http://${aws_eip.web_server.public_ip}
+    └─ URL:        http://${aws_lb.web_server.dns_name}
     
     ============================================
     📋 Next Steps:
@@ -185,7 +194,7 @@ output "deployment_summary" {
        cd .. && ./terraform/scripts/deploy-app.sh
     
     4. Verify deployment:
-       curl http://${aws_eip.web_server.public_ip}/api/health
+       curl http://${aws_lb.web_server.dns_name}/api/health
     
     ============================================
   EOT
