@@ -154,6 +154,13 @@ resource "aws_iam_role_policy" "worker" {
   })
 }
 
+# Attach AmazonSSMManagedInstanceCore policy to worker role
+# This allows EC2 instances to receive and execute SSM commands
+resource "aws_iam_role_policy_attachment" "worker_ssm" {
+  role       = aws_iam_role.worker.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
+}
+
 # Worker Instance Profile
 resource "aws_iam_instance_profile" "worker" {
   name = "${var.project_name}-worker-profile"
