@@ -170,6 +170,31 @@ jobs:
           for INSTANCE_ID in $INSTANCE_IDS; do
             echo "Deploying to instance: $INSTANCE_ID"
             
+            # Wait for instance to be ready for SSM (can take 1-2 minutes after launch)
+            echo "Waiting for instance $INSTANCE_ID to be ready for SSM..."
+            MAX_WAIT=300  # 5 minutes
+            WAIT_COUNT=0
+            while [ $WAIT_COUNT -lt $MAX_WAIT ]; do
+              if aws ssm describe-instance-information \
+                --filters "Key=InstanceIds,Values=$INSTANCE_ID" \
+                --region ${{ env.AWS_REGION }} \
+                --query 'InstanceInformationList[0].PingStatus' \
+                --output text 2>/dev/null | grep -q "Online"; then
+                echo "✅ Instance $INSTANCE_ID is ready for SSM"
+                break
+              else
+                WAIT_COUNT=$((WAIT_COUNT + 10))
+                if [ $WAIT_COUNT -lt $MAX_WAIT ]; then
+                  echo "⏳ Waiting for SSM agent to be ready... ($WAIT_COUNT/$MAX_WAIT seconds)"
+                  sleep 10
+                else
+                  echo "❌ Instance $INSTANCE_ID did not become ready for SSM within $MAX_WAIT seconds"
+                  echo "   This usually means the IAM role doesn't have AmazonSSMManagedInstanceCore policy"
+                  exit 1
+                fi
+              fi
+            done
+            
             # Upload nginx config via SSM
             echo "Uploading nginx config..."
             # Base64 encode the nginx config file
