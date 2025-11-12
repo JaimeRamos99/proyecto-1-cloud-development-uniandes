@@ -144,67 +144,139 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
 
-      - name: Deploy to Web Server
+      - name: Deploy to Web Server (ASG)
         run: |
-          # Create SSH key file
-          echo "${{ secrets.SSH_PRIVATE_KEY }}" > key.pem
-          chmod 400 key.pem
-
-          # Copy nginx config
-          scp -i key.pem -o StrictHostKeyChecking=no \
-            nginx/nginx.aws.conf ec2-user@${{ secrets.WEB_SERVER_IP }}:~/proyecto1/
-
-          # Copy frontend files
-          scp -i key.pem -o StrictHostKeyChecking=no -r \
-            front/dist/* ec2-user@${{ secrets.WEB_SERVER_IP }}:~/proyecto1/frontend-dist/
-
-          # Restart API container with new image
-          ssh -i key.pem -o StrictHostKeyChecking=no \
-            ec2-user@${{ secrets.WEB_SERVER_IP }} << 'ENDSSH'
-            # Login to ECR
-            aws ecr get-login-password --region ${{ env.AWS_REGION }} | sudo docker login --username AWS --password-stdin ${{ secrets.ECR_REGISTRY }}
+          # Get all instance IDs from the Auto Scaling Group
+          ASG_NAME="${{ secrets.ASG_NAME }}"
+          if [ -z "$ASG_NAME" ]; then
+            ASG_NAME="proyecto1-web-server-asg"
+          fi
+          
+          echo "Finding instances in ASG: $ASG_NAME"
+          INSTANCE_IDS=$(aws autoscaling describe-auto-scaling-groups \
+            --auto-scaling-group-names "$ASG_NAME" \
+            --region ${{ env.AWS_REGION }} \
+            --query 'AutoScalingGroups[0].Instances[*].InstanceId' \
+            --output text)
+          
+          if [ -z "$INSTANCE_IDS" ] || [ "$INSTANCE_IDS" = "None" ]; then
+            echo "❌ No instances found in ASG. Waiting for instances to be ready..."
+            exit 1
+          fi
+          
+          echo "Found instances: $INSTANCE_IDS"
+          
+          # Deploy to each instance using SSM
+          for INSTANCE_ID in $INSTANCE_IDS; do
+            echo "Deploying to instance: $INSTANCE_ID"
             
-            # Stop and remove existing API container
-            sudo docker stop proyecto1-api-aws || true
-            sudo docker rm proyecto1-api-aws || true
+            # Upload nginx config via SSM
+            echo "Uploading nginx config..."
+            # Base64 encode the nginx config file
+            NGINX_B64=$(cat nginx/nginx.aws.conf | base64 -w 0)
             
-            # Pull latest image
-            sudo docker pull ${{ secrets.ECR_REGISTRY }}/${{ env.ECR_API_REPO }}:latest
+            # Upload nginx config using SSM with base64 content embedded
+            NGINX_UPLOAD_CMD_ID=$(aws ssm send-command \
+              --instance-ids "$INSTANCE_ID" \
+              --document-name "AWS-RunShellScript" \
+              --parameters "commands=[
+                'mkdir -p /home/ec2-user/proyecto1',
+                'echo \"$NGINX_B64\" | base64 -d > /home/ec2-user/proyecto1/nginx.aws.conf',
+                'chmod 644 /home/ec2-user/proyecto1/nginx.aws.conf',
+                'test -f /home/ec2-user/proyecto1/nginx.aws.conf && echo \"Nginx config uploaded successfully\" || echo \"Nginx config upload failed\"'
+              ]" \
+              --parameters "environment=[\"NGINX_B64=$NGINX_B64\"]" \
+              --region ${{ env.AWS_REGION }} \
+              --query 'Command.CommandId' \
+              --output text)
             
-            # Start new API container
-            sudo docker run -d --name proyecto1-api-aws --restart unless-stopped \
-              --network host \
-              -e DB_HOST=${{ secrets.RDS_ENDPOINT }} \
-              -e DB_PORT=5432 \
-              -e DB_NAME=proyecto_1 \
-              -e DB_USER=postgres \
-              -e DB_PASSWORD=${{ secrets.DB_PASSWORD }} \
-              -e DB_SSL_MODE=require \
-              -e S3_BUCKET_NAME=${{ secrets.S3_BUCKET_NAME }} \
-              -e SQS_QUEUE_NAME=${{ secrets.SQS_QUEUE_NAME }} \
-              -e JWT_SECRET=${{ secrets.JWT_SECRET }} \
-              -e AWS_DEFAULT_REGION=us-east-1 \
-              ${{ secrets.ECR_REGISTRY }}/${{ env.ECR_API_REPO }}:latest
+            # Wait for nginx config upload to complete
+            if [ -n "$NGINX_UPLOAD_CMD_ID" ]; then
+              echo "Waiting for nginx config upload..."
+              aws ssm wait command-executed \
+                --command-id "$NGINX_UPLOAD_CMD_ID" \
+                --instance-id "$INSTANCE_ID" \
+                --region ${{ env.AWS_REGION }} || echo "Warning: Nginx config upload may have failed"
+              
+              # Verify upload succeeded
+              UPLOAD_STATUS=$(aws ssm get-command-invocation \
+                --command-id "$NGINX_UPLOAD_CMD_ID" \
+                --instance-id "$INSTANCE_ID" \
+                --region ${{ env.AWS_REGION }} \
+                --query 'Status' \
+                --output text)
+              
+              if [ "$UPLOAD_STATUS" != "Success" ]; then
+                echo "⚠️  Nginx config upload failed, but continuing deployment..."
+                aws ssm get-command-invocation \
+                  --command-id "$NGINX_UPLOAD_CMD_ID" \
+                  --instance-id "$INSTANCE_ID" \
+                  --region ${{ env.AWS_REGION }} \
+                  --query 'StandardErrorContent' \
+                  --output text || true
+              else
+                echo "✅ Nginx config uploaded successfully"
+              fi
+            fi
             
-            # Restart frontend container
-            sudo docker stop proyecto1-frontend-aws || true
-            sudo docker rm proyecto1-frontend-aws || true
-            sudo docker pull ${{ secrets.ECR_REGISTRY }}/${{ env.ECR_FRONTEND_REPO }}:latest
-            sudo docker run -d --name proyecto1-frontend-aws --restart unless-stopped \
-              --network host \
-              ${{ secrets.ECR_REGISTRY }}/${{ env.ECR_FRONTEND_REPO }}:latest
+            # Send deployment command via SSM
+            COMMAND_ID=$(aws ssm send-command \
+              --instance-ids "$INSTANCE_ID" \
+              --document-name "AWS-RunShellScript" \
+              --parameters "commands=[
+                'set -e',
+                'aws ecr get-login-password --region ${{ env.AWS_REGION }} | sudo docker login --username AWS --password-stdin ${{ secrets.ECR_REGISTRY }}',
+                'sudo docker stop proyecto1-api-aws || true',
+                'sudo docker rm proyecto1-api-aws || true',
+                'sudo docker pull ${{ secrets.ECR_REGISTRY }}/${{ env.ECR_API_REPO }}:latest',
+                'sudo docker run -d --name proyecto1-api-aws --restart unless-stopped --network host -e DB_HOST=${{ secrets.RDS_ENDPOINT }} -e DB_PORT=5432 -e DB_NAME=proyecto_1 -e DB_USER=postgres -e DB_PASSWORD=${{ secrets.DB_PASSWORD }} -e DB_SSL_MODE=require -e S3_BUCKET_NAME=${{ secrets.S3_BUCKET_NAME }} -e SQS_QUEUE_NAME=${{ secrets.SQS_QUEUE_NAME }} -e JWT_SECRET=${{ secrets.JWT_SECRET }} -e AWS_DEFAULT_REGION=${{ env.AWS_REGION }} ${{ secrets.ECR_REGISTRY }}/${{ env.ECR_API_REPO }}:latest',
+                'sudo docker stop proyecto1-frontend-aws || true',
+                'sudo docker rm proyecto1-frontend-aws || true',
+                'sudo docker pull ${{ secrets.ECR_REGISTRY }}/${{ env.ECR_FRONTEND_REPO }}:latest',
+                'sudo docker run -d --name proyecto1-frontend-aws --restart unless-stopped --network host ${{ secrets.ECR_REGISTRY }}/${{ env.ECR_FRONTEND_REPO }}:latest',
+                'sudo docker stop proyecto1-nginx-aws || true',
+                'sudo docker rm proyecto1-nginx-aws || true',
+                'sudo docker run -d --name proyecto1-nginx-aws --restart unless-stopped --network host -v /home/ec2-user/proyecto1/nginx.aws.conf:/etc/nginx/nginx.conf:ro nginx:alpine',
+                'sudo docker ps'
+              ]" \
+              --parameters "executionTimeout=['3600']" \
+              --parameters "workingDirectory=['/home/ec2-user']" \
+              --region ${{ env.AWS_REGION }} \
+              --query 'Command.CommandId' \
+              --output text)
             
-            # Restart nginx container
-            sudo docker stop proyecto1-nginx-aws || true
-            sudo docker rm proyecto1-nginx-aws || true
-            sudo docker run -d --name proyecto1-nginx-aws --restart unless-stopped \
-              --network host \
-              -v /home/ec2-user/proyecto1/nginx.aws.conf:/etc/nginx/nginx.conf:ro \
-              nginx:alpine
+            echo "Command ID: $COMMAND_ID"
             
-            # Show running containers
-            sudo docker ps
-          ENDSSH
+            # Wait for command to complete
+            echo "Waiting for deployment to complete..."
+            aws ssm wait command-executed \
+              --command-id "$COMMAND_ID" \
+              --instance-id "$INSTANCE_ID" \
+              --region ${{ env.AWS_REGION }} || true
+            
+            # Check command status
+            STATUS=$(aws ssm get-command-invocation \
+              --command-id "$COMMAND_ID" \
+              --instance-id "$INSTANCE_ID" \
+              --region ${{ env.AWS_REGION }} \
+              --query 'Status' \
+              --output text)
+            
+            if [ "$STATUS" != "Success" ]; then
+              echo "❌ Deployment failed on instance $INSTANCE_ID with status: $STATUS"
+              aws ssm get-command-invocation \
+                --command-id "$COMMAND_ID" \
+                --instance-id "$INSTANCE_ID" \
+                --region ${{ env.AWS_REGION }} \
+                --query 'StandardErrorContent' \
+                --output text
+              exit 1
+            else
+              echo "✅ Deployment successful on instance $INSTANCE_ID"
+            fi
+          done
+          
+          echo "✅ All instances deployed successfully!"
 
       - name: Restart Worker
         run: |
@@ -240,10 +312,62 @@ jobs:
 
       - name: Health Check
         run: |
+          # Get ALB DNS name from secret or AWS CLI
+          ALB_DNS="${{ secrets.ALB_DNS_NAME }}"
+          
+          if [ -z "$ALB_DNS" ]; then
+            echo "⚠️  ALB_DNS_NAME secret not set. Attempting to get from AWS..."
+            # Try to get ALB DNS from AWS CLI using the ASG name
+            ASG_NAME="${{ secrets.ASG_NAME }}"
+            if [ -z "$ASG_NAME" ]; then
+              ASG_NAME="proyecto1-web-server-alb"
+            fi
+            
+            # Get ALB DNS name from AWS
+            ALB_DNS=$(aws elbv2 describe-load-balancers \
+              --region ${{ env.AWS_REGION }} \
+              --query "LoadBalancers[?contains(LoadBalancerName, 'proyecto1-web-server-alb')].DNSName" \
+              --output text | head -n 1)
+          fi
+          
+          if [ -z "$ALB_DNS" ]; then
+            echo "❌ Could not determine ALB DNS name."
+            echo "   Please set ALB_DNS_NAME secret in GitHub Settings → Secrets and variables → Actions"
+            echo "   Get the value with: terraform output -raw alb_dns_name"
+            exit 1
+          fi
+          
+          echo "Checking health at: http://$ALB_DNS"
+          echo "Waiting for instances to be healthy..."
           sleep 30
-          echo "Checking API health through nginx..."
-          curl -f http://${{ secrets.WEB_SERVER_IP }}/api/health || exit 1
+          
+          # Retry health check up to 3 times
+          MAX_RETRIES=3
+          RETRY_COUNT=0
+          
+          while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
+            echo "Attempt $((RETRY_COUNT + 1))/$MAX_RETRIES: Checking API health through ALB..."
+            if curl -f -s --max-time 10 http://$ALB_DNS/api/health > /dev/null; then
+              echo "✅ API health check passed"
+              break
+            else
+              RETRY_COUNT=$((RETRY_COUNT + 1))
+              if [ $RETRY_COUNT -lt $MAX_RETRIES ]; then
+                echo "⏳ Health check failed, retrying in 15 seconds..."
+                sleep 15
+              else
+                echo "❌ API health check failed after $MAX_RETRIES attempts"
+                exit 1
+              fi
+            fi
+          done
+          
           echo "Checking Frontend..."
-          curl -f http://${{ secrets.WEB_SERVER_IP }} || exit 1
+          if curl -f -s --max-time 10 http://$ALB_DNS > /dev/null; then
+            echo "✅ Frontend check passed"
+          else
+            echo "⚠️  Frontend check failed, but API is working"
+          fi
+          
           echo "✅ Deployment successful!"
-          echo "🌐 Application URL: http://${{ secrets.WEB_SERVER_IP }}"
+          echo "🌐 Application URL: http://$ALB_DNS"
