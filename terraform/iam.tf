@@ -64,30 +64,16 @@ resource "aws_iam_role_policy" "web_server" {
           "ecr:BatchGetImage"
         ]
         Resource = "*"
-      },
-      {
-        Effect = "Allow"
-        Action = [
-          "ssm:SendCommand",
-          "ssm:ListCommandInvocations",
-          "ssm:GetCommandInvocation",
-          "ssm:DescribeInstanceInformation",
-          "ssm:StartSession"
-        ]
-        Resource = "*"
-      },
-      {
-        Effect = "Allow"
-        Action = [
-          "ssmmessages:CreateControlChannel",
-          "ssmmessages:CreateDataChannel",
-          "ssmmessages:OpenControlChannel",
-          "ssmmessages:OpenDataChannel"
-        ]
-        Resource = "*"
       }
     ]
   })
+}
+
+# Attach AmazonSSMManagedInstanceCore policy to web server role
+# This allows EC2 instances to receive and execute SSM commands
+resource "aws_iam_role_policy_attachment" "web_server_ssm" {
+  role       = aws_iam_role.web_server.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
 }
 
 # Web Server Instance Profile
