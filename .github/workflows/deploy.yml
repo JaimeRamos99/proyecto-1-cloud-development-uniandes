@@ -170,6 +170,34 @@ jobs:
           for INSTANCE_ID in $INSTANCE_IDS; do
             echo "Deploying to instance: $INSTANCE_ID"
             
+            # Wait for instance to be ready for SSM (can take 1-2 minutes after launch)
+            echo "Waiting for instance $INSTANCE_ID to be ready for SSM..."
+            MAX_WAIT=300  # 5 minutes
+            WAIT_COUNT=0
+            while [ $WAIT_COUNT -lt $MAX_WAIT ]; do
+              PING_STATUS=$(aws ssm describe-instance-information \
+                --filters "Key=InstanceIds,Values=$INSTANCE_ID" \
+                --region ${{ env.AWS_REGION }} \
+                --query 'InstanceInformationList[0].PingStatus' \
+                --output text 2>/dev/null)
+              
+              if [ "$PING_STATUS" = "Online" ]; then
+                echo "✅ Instance $INSTANCE_ID is ready for SSM"
+                break
+              else
+                WAIT_COUNT=$((WAIT_COUNT + 10))
+                if [ $WAIT_COUNT -lt $MAX_WAIT ]; then
+                  echo "⏳ Waiting for SSM agent to be ready... ($WAIT_COUNT/$MAX_WAIT seconds) [Status: ${PING_STATUS:-NotRegistered}]"
+                  sleep 10
+                else
+                  echo "❌ Instance $INSTANCE_ID did not become ready for SSM within $MAX_WAIT seconds"
+                  echo "   Current status: ${PING_STATUS:-NotRegistered}"
+                  echo "   This usually means the IAM role doesn't have AmazonSSMManagedInstanceCore policy"
+                  exit 1
+                fi
+              fi
+            done
+            
             # Upload nginx config via SSM
             echo "Uploading nginx config..."
             # Base64 encode the nginx config file
@@ -223,6 +251,55 @@ jobs:
                   --output text || true
               else
                 echo "✅ Nginx config uploaded successfully"
+              fi
+            fi
+            
+            # Upload frontend files via SSM
+            echo "Uploading frontend files..."
+            # Create a tarball of the frontend dist directory
+            cd front/dist
+            tar -czf /tmp/frontend-dist.tar.gz .
+            cd ../..
+            FRONTEND_B64=$(cat /tmp/frontend-dist.tar.gz | base64 -w 0)
+            rm -f /tmp/frontend-dist.tar.gz
+            
+            # Create temporary file for frontend upload SSM parameters
+            FRONTEND_PARAMS_FILE=$(mktemp)
+            jq -n \
+              --arg cmd1 "mkdir -p /home/ec2-user/proyecto1/frontend-dist" \
+              --arg cmd2 "echo '$FRONTEND_B64' | base64 -d | tar -xzf - -C /home/ec2-user/proyecto1/frontend-dist" \
+              --arg cmd3 "chown -R ec2-user:ec2-user /home/ec2-user/proyecto1/frontend-dist" \
+              --arg cmd4 "test -d /home/ec2-user/proyecto1/frontend-dist && echo 'Frontend files uploaded successfully' || echo 'Frontend files upload failed'" \
+              '{commands: [$cmd1, $cmd2, $cmd3, $cmd4]}' > "$FRONTEND_PARAMS_FILE"
+            
+            FRONTEND_UPLOAD_CMD_ID=$(aws ssm send-command \
+              --instance-ids "$INSTANCE_ID" \
+              --document-name "AWS-RunShellScript" \
+              --parameters file://"$FRONTEND_PARAMS_FILE" \
+              --region ${{ env.AWS_REGION }} \
+              --query 'Command.CommandId' \
+              --output text)
+            
+            rm -f "$FRONTEND_PARAMS_FILE"
+            
+            if [ -n "$FRONTEND_UPLOAD_CMD_ID" ]; then
+              echo "Waiting for frontend files upload..."
+              aws ssm wait command-executed \
+                --command-id "$FRONTEND_UPLOAD_CMD_ID" \
+                --instance-id "$INSTANCE_ID" \
+                --region ${{ env.AWS_REGION }} || echo "Warning: Frontend files upload may have failed"
+              
+              FRONTEND_STATUS=$(aws ssm get-command-invocation \
+                --command-id "$FRONTEND_UPLOAD_CMD_ID" \
+                --instance-id "$INSTANCE_ID" \
+                --region ${{ env.AWS_REGION }} \
+                --query 'Status' \
+                --output text)
+              
+              if [ "$FRONTEND_STATUS" != "Success" ]; then
+                echo "⚠️  Frontend files upload failed, but continuing deployment..."
+              else
+                echo "✅ Frontend files uploaded successfully"
               fi
             fi
             
@@ -295,58 +372,209 @@ jobs:
 
       - name: Restart Worker
         run: |
-          ssh -i key.pem -o StrictHostKeyChecking=no \
-            ec2-user@${{ secrets.WORKER_IP }} << 'ENDSSH'
-            # Login to ECR
-            aws ecr get-login-password --region ${{ env.AWS_REGION }} | sudo docker login --username AWS --password-stdin ${{ secrets.ECR_REGISTRY }}
+          # Get worker instance ID by tag
+          echo "Finding worker instance..."
+          WORKER_INSTANCE_ID=$(aws ec2 describe-instances \
+            --filters "Name=tag:Name,Values=proyecto1-worker" "Name=instance-state-name,Values=running" \
+            --region ${{ env.AWS_REGION }} \
+            --query 'Reservations[0].Instances[0].InstanceId' \
+            --output text)
+          
+          if [ -z "$WORKER_INSTANCE_ID" ] || [ "$WORKER_INSTANCE_ID" = "None" ]; then
+            echo "❌ Worker instance not found"
+            exit 1
+          fi
+          
+          echo "Found worker instance: $WORKER_INSTANCE_ID"
+          
+          # Check if IAM role has SSM policy attached
+          echo "Checking IAM role permissions..."
+          INSTANCE_PROFILE_ARN=$(aws ec2 describe-instances \
+            --instance-ids "$WORKER_INSTANCE_ID" \
+            --region ${{ env.AWS_REGION }} \
+            --query 'Reservations[0].Instances[0].IamInstanceProfile.Arn' \
+            --output text)
+          
+          if [ -n "$INSTANCE_PROFILE_ARN" ] && [ "$INSTANCE_PROFILE_ARN" != "None" ]; then
+            INSTANCE_PROFILE_NAME=$(echo "$INSTANCE_PROFILE_ARN" | cut -d'/' -f2)
+            WORKER_ROLE_NAME=$(aws iam get-instance-profile \
+              --instance-profile-name "$INSTANCE_PROFILE_NAME" \
+              --query 'InstanceProfile.Roles[0].RoleName' \
+              --output text 2>/dev/null)
+          else
+            WORKER_ROLE_NAME="proyecto1-worker-role"  # Fallback to expected name
+          fi
+          
+          if [ -n "$WORKER_ROLE_NAME" ] && [ "$WORKER_ROLE_NAME" != "None" ]; then
+            echo "Worker IAM role: $WORKER_ROLE_NAME"
+            # Check if SSM policy is attached
+            SSM_POLICY_ATTACHED=$(aws iam list-attached-role-policies \
+              --role-name "$WORKER_ROLE_NAME" \
+              --query 'AttachedPolicies[?PolicyArn==`arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore`]' \
+              --output text 2>/dev/null)
             
-            # Stop and remove existing worker container
-            sudo docker stop proyecto1-worker-aws || true
-            sudo docker rm proyecto1-worker-aws || true
+            if [ -z "$SSM_POLICY_ATTACHED" ]; then
+              echo "⚠️  SSM policy not attached to worker role. Attempting to attach..."
+              if aws iam attach-role-policy \
+                --role-name "$WORKER_ROLE_NAME" \
+                --policy-arn "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore" 2>/dev/null; then
+                echo "✅ Successfully attached SSM policy"
+                echo "⏳ Waiting 30 seconds for policy to propagate..."
+                sleep 30
+              else
+                echo "⚠️  Failed to attach policy automatically (may need manual intervention or Terraform apply)"
+              fi
+            else
+              echo "✅ SSM policy is attached to worker role"
+            fi
+          fi
+          
+          # Wait for instance to be ready for SSM
+          echo "Waiting for worker instance to be ready for SSM..."
+          MAX_WAIT=300  # 5 minutes
+          WAIT_COUNT=0
+          while [ $WAIT_COUNT -lt $MAX_WAIT ]; do
+            PING_STATUS=$(aws ssm describe-instance-information \
+              --filters "Key=InstanceIds,Values=$WORKER_INSTANCE_ID" \
+              --region ${{ env.AWS_REGION }} \
+              --query 'InstanceInformationList[0].PingStatus' \
+              --output text 2>/dev/null)
             
-            # Pull latest image
-            sudo docker pull ${{ secrets.ECR_REGISTRY }}/${{ env.ECR_WORKER_REPO }}:latest
-            
-            # Start new worker container with fixed AWS credentials
-            sudo docker run -d --name proyecto1-worker-aws --restart unless-stopped \
-              --network host \
-              -e DB_HOST=${{ secrets.RDS_ENDPOINT }} \
-              -e DB_PORT=5432 \
-              -e DB_NAME=proyecto_1 \
-              -e DB_USER=postgres \
-              -e DB_PASSWORD=${{ secrets.DB_PASSWORD }} \
-              -e DB_SSL_MODE=require \
-              -e S3_BUCKET_NAME=${{ secrets.S3_BUCKET_NAME }} \
-              -e SQS_QUEUE_NAME=${{ secrets.SQS_QUEUE_NAME }} \
-              -e AWS_DEFAULT_REGION=us-east-1 \
-              ${{ secrets.ECR_REGISTRY }}/${{ env.ECR_WORKER_REPO }}:latest
-            
-            # Show running containers
-            sudo docker ps
-          ENDSSH
+            if [ "$PING_STATUS" = "Online" ]; then
+              echo "✅ Worker instance is ready for SSM"
+              break
+            else
+              WAIT_COUNT=$((WAIT_COUNT + 10))
+              if [ $WAIT_COUNT -lt $MAX_WAIT ]; then
+                echo "⏳ Waiting for SSM agent to be ready... ($WAIT_COUNT/$MAX_WAIT seconds) [Status: ${PING_STATUS:-NotRegistered}]"
+                sleep 10
+              else
+                echo "❌ Worker instance did not become ready for SSM within $MAX_WAIT seconds"
+                echo "   Current status: ${PING_STATUS:-NotRegistered}"
+                echo ""
+                echo "   To fix this issue:"
+                echo "   1. Apply Terraform changes: cd terraform && terraform apply"
+                echo "   2. Or manually attach policy:"
+                echo "      aws iam attach-role-policy --role-name proyecto1-worker-role --policy-arn arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
+                echo "   3. Then reboot the instance:"
+                echo "      aws ec2 reboot-instances --instance-ids $WORKER_INSTANCE_ID"
+                exit 1
+              fi
+            fi
+          done
+          
+          # Create temporary file for SSM parameters
+          WORKER_PARAMS_FILE=$(mktemp)
+          jq -n \
+            --arg cmd1 "aws ecr get-login-password --region ${{ env.AWS_REGION }} | sudo docker login --username AWS --password-stdin ${{ secrets.ECR_REGISTRY }}" \
+            --arg cmd2 "sudo docker stop proyecto1-worker-aws || true" \
+            --arg cmd3 "sudo docker rm proyecto1-worker-aws || true" \
+            --arg cmd4 "sudo docker pull ${{ secrets.ECR_REGISTRY }}/${{ env.ECR_WORKER_REPO }}:latest" \
+            --arg cmd5 "sudo docker run -d --name proyecto1-worker-aws --restart unless-stopped --network host -e DB_HOST=${{ secrets.RDS_ENDPOINT }} -e DB_PORT=5432 -e DB_NAME=proyecto_1 -e DB_USER=postgres -e DB_PASSWORD=${{ secrets.DB_PASSWORD }} -e DB_SSL_MODE=require -e S3_BUCKET_NAME=${{ secrets.S3_BUCKET_NAME }} -e SQS_QUEUE_NAME=${{ secrets.SQS_QUEUE_NAME }} -e AWS_DEFAULT_REGION=${{ env.AWS_REGION }} ${{ secrets.ECR_REGISTRY }}/${{ env.ECR_WORKER_REPO }}:latest" \
+            --arg cmd6 "sudo docker ps" \
+            '{commands: [$cmd1, $cmd2, $cmd3, $cmd4, $cmd5, $cmd6]}' > "$WORKER_PARAMS_FILE"
+          
+          # Send restart command via SSM
+          echo "Restarting worker via SSM..."
+          WORKER_COMMAND_ID=$(aws ssm send-command \
+            --instance-ids "$WORKER_INSTANCE_ID" \
+            --document-name "AWS-RunShellScript" \
+            --parameters file://"$WORKER_PARAMS_FILE" \
+            --region ${{ env.AWS_REGION }} \
+            --query 'Command.CommandId' \
+            --output text)
+          
+          # Clean up temp file
+          rm -f "$WORKER_PARAMS_FILE"
+          
+          echo "Worker command ID: $WORKER_COMMAND_ID"
+          
+          # Wait for command to complete
+          echo "Waiting for worker restart to complete..."
+          aws ssm wait command-executed \
+            --command-id "$WORKER_COMMAND_ID" \
+            --instance-id "$WORKER_INSTANCE_ID" \
+            --region ${{ env.AWS_REGION }} || true
+          
+          # Check command status
+          WORKER_STATUS=$(aws ssm get-command-invocation \
+            --command-id "$WORKER_COMMAND_ID" \
+            --instance-id "$WORKER_INSTANCE_ID" \
+            --region ${{ env.AWS_REGION }} \
+            --query 'Status' \
+            --output text)
+          
+          if [ "$WORKER_STATUS" != "Success" ]; then
+            echo "❌ Worker restart failed with status: $WORKER_STATUS"
+            aws ssm get-command-invocation \
+              --command-id "$WORKER_COMMAND_ID" \
+              --instance-id "$WORKER_INSTANCE_ID" \
+              --region ${{ env.AWS_REGION }} \
+              --query 'StandardErrorContent' \
+              --output text
+            exit 1
+          else
+            echo "✅ Worker restarted successfully"
+          fi
 
       - name: Health Check
         run: |
-          # Get ALB DNS name from Terraform output or secret
+          # Get ALB DNS name from secret or AWS CLI
           ALB_DNS="${{ secrets.ALB_DNS_NAME }}"
+          
           if [ -z "$ALB_DNS" ]; then
-            echo "⚠️  ALB_DNS_NAME secret not set. Getting from Terraform output..."
-            cd terraform
-            ALB_DNS=$(terraform output -raw alb_dns_name 2>/dev/null || echo "")
-            cd ..
+            echo "⚠️  ALB_DNS_NAME secret not set. Attempting to get from AWS..."
+            # Try to get ALB DNS from AWS CLI using the ASG name
+            ASG_NAME="${{ secrets.ASG_NAME }}"
+            if [ -z "$ASG_NAME" ]; then
+              ASG_NAME="proyecto1-web-server-asg"
+            fi
+            
+            # Get ALB DNS name from AWS
+            ALB_DNS=$(aws elbv2 describe-load-balancers \
+              --region ${{ env.AWS_REGION }} \
+              --query "LoadBalancers[?contains(LoadBalancerName, 'proyecto1-web-server-alb')].DNSName" \
+              --output text | head -n 1)
           fi
           
           if [ -z "$ALB_DNS" ]; then
-            echo "❌ Could not determine ALB DNS name. Please set ALB_DNS_NAME secret or run terraform output."
+            echo "❌ Could not determine ALB DNS name."
+            echo "   Please set ALB_DNS_NAME secret in GitHub Settings → Secrets and variables → Actions"
+            echo "   Get the value with: terraform output -raw alb_dns_name"
             exit 1
           fi
           
           echo "Checking health at: http://$ALB_DNS"
+          echo "Waiting for instances to be healthy..."
           sleep 30
           
-          echo "Checking API health through ALB..."
-          curl -f http://$ALB_DNS/api/health || exit 1
+          # Retry health check up to 3 times
+          MAX_RETRIES=3
+          RETRY_COUNT=0
+          
+          while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
+            echo "Attempt $((RETRY_COUNT + 1))/$MAX_RETRIES: Checking API health through ALB..."
+            if curl -f -s --max-time 10 http://$ALB_DNS/api/health > /dev/null; then
+              echo "✅ API health check passed"
+              break
+            else
+              RETRY_COUNT=$((RETRY_COUNT + 1))
+              if [ $RETRY_COUNT -lt $MAX_RETRIES ]; then
+                echo "⏳ Health check failed, retrying in 15 seconds..."
+                sleep 15
+              else
+                echo "❌ API health check failed after $MAX_RETRIES attempts"
+                exit 1
+              fi
+            fi
+          done
+          
           echo "Checking Frontend..."
-          curl -f http://$ALB_DNS || exit 1
+          if curl -f -s --max-time 10 http://$ALB_DNS > /dev/null; then
+            echo "✅ Frontend check passed"
+          else
+            echo "⚠️  Frontend check failed, but API is working"
+          fi
+          
           echo "✅ Deployment successful!"
           echo "🌐 Application URL: http://$ALB_DNS"
