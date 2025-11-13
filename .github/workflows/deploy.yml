@@ -544,37 +544,88 @@ jobs:
             exit 1
           fi
           
-          echo "Checking health at: http://$ALB_DNS"
-          echo "Waiting for instances to be healthy..."
-          sleep 30
+          echo "🌐 Checking health at: http://$ALB_DNS"
+          echo "⏳ Waiting for containers to start and ALB targets to become healthy..."
+          echo "   (This may take 60-90 seconds for first deployment)"
+          sleep 60
           
-          # Retry health check up to 3 times
-          MAX_RETRIES=3
+          # Check ALB target health
+          echo "Checking ALB target health..."
+          ALB_ARN=$(aws elbv2 describe-load-balancers \
+            --region ${{ env.AWS_REGION }} \
+            --query "LoadBalancers[?contains(LoadBalancerName, 'proyecto1-web-server-alb')].LoadBalancerArn" \
+            --output text | head -n 1)
+          
+          if [ -n "$ALB_ARN" ] && [ "$ALB_ARN" != "None" ]; then
+            TARGET_GROUPS=$(aws elbv2 describe-target-groups \
+              --region ${{ env.AWS_REGION }} \
+              --query "TargetGroups[?contains(LoadBalancerArns[0], '$ALB_ARN')].TargetGroupArn" \
+              --output text)
+            
+            for TG_ARN in $TARGET_GROUPS; do
+              echo "  Target Group: $TG_ARN"
+              aws elbv2 describe-target-health \
+                --target-group-arn "$TG_ARN" \
+                --region ${{ env.AWS_REGION }} \
+                --query 'TargetHealthDescriptions[*].[Target.Id,TargetHealth.State,TargetHealth.Reason]' \
+                --output table || true
+            done
+          fi
+          
+          # Retry health check with more attempts and better diagnostics
+          MAX_RETRIES=6
           RETRY_COUNT=0
+          RETRY_DELAY=20
           
           while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
+            echo ""
             echo "Attempt $((RETRY_COUNT + 1))/$MAX_RETRIES: Checking API health through ALB..."
-            if curl -f -s --max-time 10 http://$ALB_DNS/api/health > /dev/null; then
-              echo "✅ API health check passed"
+            
+            # Get HTTP status code and response
+            HTTP_CODE=$(curl -s -o /tmp/health_response.json -w "%{http_code}" --max-time 15 "http://$ALB_DNS/api/health" || echo "000")
+            
+            if [ "$HTTP_CODE" = "200" ]; then
+              echo "✅ API health check passed (HTTP $HTTP_CODE)"
+              cat /tmp/health_response.json | jq '.' 2>/dev/null || cat /tmp/health_response.json
+              rm -f /tmp/health_response.json
               break
             else
               RETRY_COUNT=$((RETRY_COUNT + 1))
+              echo "❌ Health check failed (HTTP $HTTP_CODE)"
+              if [ -f /tmp/health_response.json ]; then
+                echo "Response:"
+                cat /tmp/health_response.json
+                echo ""
+                rm -f /tmp/health_response.json
+              fi
+              
               if [ $RETRY_COUNT -lt $MAX_RETRIES ]; then
-                echo "⏳ Health check failed, retrying in 15 seconds..."
-                sleep 15
+                echo "⏳ Retrying in $RETRY_DELAY seconds..."
+                sleep $RETRY_DELAY
               else
+                echo ""
                 echo "❌ API health check failed after $MAX_RETRIES attempts"
+                echo ""
+                echo "Troubleshooting steps:"
+                echo "1. Check if containers are running: SSH to instance and run 'sudo docker ps'"
+                echo "2. Check container logs: 'sudo docker logs proyecto1-api-aws'"
+                echo "3. Check ALB target health in AWS Console"
+                echo "4. Verify database connectivity from the instance"
+                echo "5. Check nginx logs: 'sudo docker logs proyecto1-nginx-aws'"
                 exit 1
               fi
             fi
           done
           
+          echo ""
           echo "Checking Frontend..."
-          if curl -f -s --max-time 10 http://$ALB_DNS > /dev/null; then
-            echo "✅ Frontend check passed"
+          FRONTEND_CODE=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 "http://$ALB_DNS" || echo "000")
+          if [ "$FRONTEND_CODE" = "200" ] || [ "$FRONTEND_CODE" = "304" ]; then
+            echo "✅ Frontend check passed (HTTP $FRONTEND_CODE)"
           else
-            echo "⚠️  Frontend check failed, but API is working"
+            echo "⚠️  Frontend check returned HTTP $FRONTEND_CODE (API is working, frontend may need more time)"
           fi
           
+          echo ""
           echo "✅ Deployment successful!"
           echo "🌐 Application URL: http://$ALB_DNS"
