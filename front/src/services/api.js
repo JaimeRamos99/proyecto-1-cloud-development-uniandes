@@ -1,4 +1,6 @@
-const BASE_URL = "http://13.223.138.92";
+// Use relative URL so it works with any domain (local, staging, production)
+// This way the frontend always uses the same domain it's served from
+const BASE_URL = window.location.origin;
 
 class ApiService {
   constructor() {

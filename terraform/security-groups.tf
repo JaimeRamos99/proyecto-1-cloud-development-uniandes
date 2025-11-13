@@ -59,13 +59,13 @@ resource "aws_security_group" "web_server" {
     cidr_blocks = [var.allowed_ssh_cidr]
   }
 
-  # HTTP access from ALB only
+  # HTTP access from internet (direct access without ALB)
   ingress {
-    description     = "HTTP from ALB"
-    from_port       = 80
-    to_port         = 80
-    protocol        = "tcp"
-    security_groups = [aws_security_group.alb.id]
+    description = "HTTP from anywhere"
+    from_port   = 80
+    to_port     = 80
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
   }
 
   # API port (internal, just in case)
