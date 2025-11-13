@@ -131,12 +131,6 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Download frontend artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: frontend-dist
-          path: front/dist
-
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
@@ -254,54 +248,8 @@ jobs:
               fi
             fi
             
-            # Upload frontend files via SSM
-            echo "Uploading frontend files..."
-            # Create a tarball of the frontend dist directory
-            cd front/dist
-            tar -czf /tmp/frontend-dist.tar.gz .
-            cd ../..
-            FRONTEND_B64=$(cat /tmp/frontend-dist.tar.gz | base64 -w 0)
-            rm -f /tmp/frontend-dist.tar.gz
-            
-            # Create temporary file for frontend upload SSM parameters
-            FRONTEND_PARAMS_FILE=$(mktemp)
-            jq -n \
-              --arg cmd1 "mkdir -p /home/ec2-user/proyecto1/frontend-dist" \
-              --arg cmd2 "echo '$FRONTEND_B64' | base64 -d | tar -xzf - -C /home/ec2-user/proyecto1/frontend-dist" \
-              --arg cmd3 "chown -R ec2-user:ec2-user /home/ec2-user/proyecto1/frontend-dist" \
-              --arg cmd4 "test -d /home/ec2-user/proyecto1/frontend-dist && echo 'Frontend files uploaded successfully' || echo 'Frontend files upload failed'" \
-              '{commands: [$cmd1, $cmd2, $cmd3, $cmd4]}' > "$FRONTEND_PARAMS_FILE"
-            
-            FRONTEND_UPLOAD_CMD_ID=$(aws ssm send-command \
-              --instance-ids "$INSTANCE_ID" \
-              --document-name "AWS-RunShellScript" \
-              --parameters file://"$FRONTEND_PARAMS_FILE" \
-              --region ${{ env.AWS_REGION }} \
-              --query 'Command.CommandId' \
-              --output text)
-            
-            rm -f "$FRONTEND_PARAMS_FILE"
-            
-            if [ -n "$FRONTEND_UPLOAD_CMD_ID" ]; then
-              echo "Waiting for frontend files upload..."
-              aws ssm wait command-executed \
-                --command-id "$FRONTEND_UPLOAD_CMD_ID" \
-                --instance-id "$INSTANCE_ID" \
-                --region ${{ env.AWS_REGION }} || echo "Warning: Frontend files upload may have failed"
-              
-              FRONTEND_STATUS=$(aws ssm get-command-invocation \
-                --command-id "$FRONTEND_UPLOAD_CMD_ID" \
-                --instance-id "$INSTANCE_ID" \
-                --region ${{ env.AWS_REGION }} \
-                --query 'Status' \
-                --output text)
-              
-              if [ "$FRONTEND_STATUS" != "Success" ]; then
-                echo "⚠️  Frontend files upload failed, but continuing deployment..."
-              else
-                echo "✅ Frontend files uploaded successfully"
-              fi
-            fi
+            # Note: Frontend files are already included in the Docker image, so no need to download them separately.
+            # The nginx config proxies to the frontend container (localhost:3000), which serves the built files.
             
             # Send deployment command via SSM
             # Create temporary file for SSM parameters (using file:// to avoid shell escaping issues)
