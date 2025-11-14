@@ -1,5 +1,6 @@
 # Proyecto_1 - Web Server Launch Template
-# Launch template for Auto Scaling Group (API + Nginx + Frontend)
+# Launch template for Auto Scaling Group (API + Nginx only)
+# Frontend is served from CloudFront/S3
 
 resource "aws_launch_template" "web_server" {
   name_prefix   = "${var.project_name}-web-server-"

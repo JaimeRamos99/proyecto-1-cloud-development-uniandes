@@ -42,6 +42,7 @@ mkdir -p /home/ec2-user/proyecto1
 cd /home/ec2-user/proyecto1
 
 # Create docker-compose.yml
+# Note: Frontend is served from CloudFront/S3, not from EC2
 echo "Creating Docker Compose configuration..."
 cat > docker-compose.yml << 'EOF'
 version: '3.8'
