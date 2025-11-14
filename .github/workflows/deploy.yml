@@ -254,8 +254,8 @@ jobs:
               fi
             fi
             
-            # Note: Frontend files are already included in the Docker image, so no need to download them separately.
-            # The nginx config proxies to the frontend container (localhost:3000), which serves the built files.
+            # Note: Frontend is served from CloudFront/S3, not from EC2.
+            # EC2 only runs API container and nginx (for API routing via ALB).
             
             # Send deployment command via SSM
             DEPLOY_PARAMS_FILE=$(mktemp)
@@ -266,17 +266,13 @@ jobs:
               --arg cmd4 "sudo docker rm proyecto1-api-aws || true" \
               --arg cmd5 "sudo docker pull ${{ secrets.ECR_REGISTRY }}/${{ env.ECR_API_REPO }}:latest" \
               --arg cmd6 "sudo docker run -d --name proyecto1-api-aws --restart unless-stopped --network host -e DB_HOST=${{ secrets.RDS_ENDPOINT }} -e DB_PORT=5432 -e DB_NAME=proyecto_1 -e DB_USER=postgres -e DB_PASSWORD=${{ secrets.DB_PASSWORD }} -e DB_SSL_MODE=require -e S3_BUCKET_NAME=${{ secrets.S3_BUCKET_NAME }} -e SQS_QUEUE_NAME=${{ secrets.SQS_QUEUE_NAME }} -e JWT_SECRET=${{ secrets.JWT_SECRET }} -e AWS_DEFAULT_REGION=${{ env.AWS_REGION }} ${{ secrets.ECR_REGISTRY }}/${{ env.ECR_API_REPO }}:latest" \
-              --arg cmd7 "sudo docker stop proyecto1-frontend-aws || true" \
-              --arg cmd8 "sudo docker rm proyecto1-frontend-aws || true" \
-              --arg cmd9 "sudo docker pull ${{ secrets.ECR_REGISTRY }}/${{ env.ECR_FRONTEND_REPO }}:latest" \
-              --arg cmd10 "sudo docker run -d --name proyecto1-frontend-aws --restart unless-stopped --network host ${{ secrets.ECR_REGISTRY }}/${{ env.ECR_FRONTEND_REPO }}:latest" \
-              --arg cmd11 "sudo docker stop proyecto1-nginx-aws || true" \
-              --arg cmd12 "sudo docker rm proyecto1-nginx-aws || true" \
-              --arg cmd13 "sudo docker run -d --name proyecto1-nginx-aws --restart unless-stopped --network host -v /home/ec2-user/proyecto1/nginx.aws.conf:/etc/nginx/nginx.conf:ro nginx:alpine" \
-              --arg cmd14 "sudo docker ps" \
+              --arg cmd7 "sudo docker stop proyecto1-nginx-aws || true" \
+              --arg cmd8 "sudo docker rm proyecto1-nginx-aws || true" \
+              --arg cmd9 "sudo docker run -d --name proyecto1-nginx-aws --restart unless-stopped --network host -v /home/ec2-user/proyecto1/nginx.aws.conf:/etc/nginx/nginx.conf:ro nginx:alpine" \
+              --arg cmd10 "sudo docker ps" \
               --arg timeout "3600" \
               --arg workdir "/home/ec2-user" \
-              '{commands: [$cmd1, $cmd2, $cmd3, $cmd4, $cmd5, $cmd6, $cmd7, $cmd8, $cmd9, $cmd10, $cmd11, $cmd12, $cmd13, $cmd14], executionTimeout: [$timeout], workingDirectory: [$workdir]}' > "$DEPLOY_PARAMS_FILE"
+              '{commands: [$cmd1, $cmd2, $cmd3, $cmd4, $cmd5, $cmd6, $cmd7, $cmd8, $cmd9, $cmd10], executionTimeout: [$timeout], workingDirectory: [$workdir]}' > "$DEPLOY_PARAMS_FILE"
             
             COMMAND_ID=$(aws ssm send-command \
               --instance-ids "$INSTANCE_ID" \

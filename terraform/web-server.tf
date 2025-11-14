@@ -27,7 +27,6 @@ resource "aws_launch_template" "web_server" {
   user_data = base64encode(templatefile("${path.module}/user-data-web-server.sh", {
     aws_region          = var.aws_region
     ecr_api_url         = aws_ecr_repository.api.repository_url
-    ecr_frontend_url    = aws_ecr_repository.frontend.repository_url
     ecr_image_tag       = var.ecr_image_tag
     db_host             = aws_db_instance.main.address
     db_port             = aws_db_instance.main.port

@@ -81,18 +81,6 @@ services:
       timeout: 10s
       retries: 3
 
-  frontend:
-    image: ${ecr_frontend_url}:${ecr_image_tag}
-    container_name: ${project_name}-frontend-aws
-    restart: unless-stopped
-    network_mode: host
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-
-
   nginx:
     image: nginx:alpine
     container_name: ${project_name}-nginx-aws
@@ -101,7 +89,6 @@ services:
     volumes:
       - ./nginx.aws.conf:/etc/nginx/nginx.conf:ro
     depends_on:
-      - frontend
       - api
     healthcheck:
       test: ["CMD", "wget", "-q", "--spider", "http://localhost/nginx-health"]
@@ -110,9 +97,6 @@ services:
       retries: 3
 
 EOF
-
-# Create placeholder directories
-mkdir -p frontend-dist
 
 # Set proper permissions
 chown -R ec2-user:ec2-user /home/ec2-user/proyecto1
@@ -141,7 +125,8 @@ echo "==================================="
 echo "Web Server Initialization Complete"
 echo "==================================="
 echo "Next steps:"
-echo "1. Push Docker images to ECR"
-echo "2. Copy nginx.config and frontend files"
+echo "1. Push API Docker image to ECR"
+echo "2. Copy nginx.config"
 echo "3. Run: docker-compose up -d"
+echo "Note: Frontend is served from CloudFront/S3"
 
