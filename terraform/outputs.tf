@@ -82,6 +82,23 @@ output "ecr_frontend_repository_url" {
   value       = aws_ecr_repository.frontend.repository_url
 }
 
+# CloudFront Distribution
+output "cloudfront_domain" {
+  description = "CloudFront distribution domain name"
+  value       = aws_cloudfront_distribution.frontend.domain_name
+}
+
+output "cloudfront_distribution_id" {
+  description = "CloudFront distribution ID"
+  value       = aws_cloudfront_distribution.frontend.id
+}
+
+# Frontend S3 Bucket
+output "frontend_s3_bucket" {
+  description = "Frontend S3 bucket name"
+  value       = aws_s3_bucket.frontend.id
+}
+
 # Security Groups
 output "web_server_security_group_id" {
   description = "Security group ID for web server"

@@ -13,7 +13,7 @@ env:
   ECR_FRONTEND_REPO: proyecto1-frontend
 
 jobs:
-  build-and-push:
+  build-and-push-to-ecr:
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main'
 
@@ -59,20 +59,9 @@ jobs:
             ${{ secrets.ECR_REGISTRY }}/${{ env.ECR_WORKER_REPO }}:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
-      - name: Build and push Frontend image
-        uses: docker/build-push-action@v5
-        with:
-          context: ./front
-          platforms: linux/amd64
-          push: true
-          tags: |
-            ${{ secrets.ECR_REGISTRY }}/${{ env.ECR_FRONTEND_REPO }}:${{ github.sha }}
-            ${{ secrets.ECR_REGISTRY }}/${{ env.ECR_FRONTEND_REPO }}:latest
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
 
   migrate-database:
-    needs: build-and-push
+    needs: build-and-push-to-ecr
     runs-on: ubuntu-latest
 
     steps:
@@ -93,38 +82,56 @@ jobs:
           psql -h ${{ secrets.RDS_ENDPOINT }} -U postgres -d proyecto_1 -f db/004_create_votes_table.sql || true
           psql -h ${{ secrets.RDS_ENDPOINT }} -U postgres -d proyecto_1 -f db/005_create_player_rankings_view.sql || true
 
-  build-frontend:
+  build-and-deploy-frontend:
     runs-on: ubuntu-latest
-
+    if: github.ref == 'refs/heads/main'
+    
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: "18"
-          cache: "npm"
-          cache-dependency-path: front/package-lock.json
-
-      - name: Install dependencies
-        run: |
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: "18"
+        cache: "npm"
+        cache-dependency-path: front/package-lock.json
+      
+    - name: Install dependencies
+      run: |
           cd front
           npm ci
-
-      - name: Build frontend
-        run: |
+      
+    - name: Build frontend
+      run: |
           cd front
           npm run build
-
-      - name: Upload frontend artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: frontend-dist
-          path: front/dist
+      
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+      
+    - name: Deploy to S3
+      run: |
+          aws s3 sync front/dist/ s3://${{ secrets.FRONTEND_S3_BUCKET }}/ \
+            --delete \
+            --cache-control "public,max-age=31536000,immutable" \
+            --exclude "index.html"
+          
+          aws s3 cp front/dist/index.html s3://${{ secrets.FRONTEND_S3_BUCKET }}/index.html \
+            --cache-control "public,max-age=0,must-revalidate"
+      
+    - name: Invalidate CloudFront cache
+      run: |
+          aws cloudfront create-invalidation \
+            --distribution-id ${{ secrets.CLOUDFRONT_DISTRIBUTION_ID }} \
+            --paths "/*"
 
   deploy:
-    needs: [build-and-push, migrate-database, build-frontend]
+    needs: [build-and-push-to-ecr, migrate-database, build-and-deploy-frontend]
     runs-on: ubuntu-latest
 
     steps:
