@@ -1,4 +1,4 @@
-name: Deploy to AWS
+name: Deployment
 
 on:
   push:
@@ -317,7 +317,7 @@ jobs:
           
           echo "✅ All instances deployed successfully!"
 
-      - name: Restart Worker
+      - name: Deploy Worker Service
         run: |
           # Get worker instance ID by tag
           echo "Finding worker instance..."
@@ -413,16 +413,17 @@ jobs:
           # Create temporary file for SSM parameters
           WORKER_PARAMS_FILE=$(mktemp)
           jq -n \
-            --arg cmd1 "aws ecr get-login-password --region ${{ env.AWS_REGION }} | sudo docker login --username AWS --password-stdin ${{ secrets.ECR_REGISTRY }}" \
-            --arg cmd2 "sudo docker stop proyecto1-worker-aws || true" \
-            --arg cmd3 "sudo docker rm proyecto1-worker-aws || true" \
-            --arg cmd4 "sudo docker pull ${{ secrets.ECR_REGISTRY }}/${{ env.ECR_WORKER_REPO }}:latest" \
-            --arg cmd5 "sudo docker run -d --name proyecto1-worker-aws --restart unless-stopped --network host -e DB_HOST=${{ secrets.RDS_ENDPOINT }} -e DB_PORT=5432 -e DB_NAME=proyecto_1 -e DB_USER=postgres -e DB_PASSWORD=${{ secrets.DB_PASSWORD }} -e DB_SSL_MODE=require -e S3_BUCKET_NAME=${{ secrets.S3_BUCKET_NAME }} -e SQS_QUEUE_NAME=${{ secrets.SQS_QUEUE_NAME }} -e AWS_DEFAULT_REGION=${{ env.AWS_REGION }} ${{ secrets.ECR_REGISTRY }}/${{ env.ECR_WORKER_REPO }}:latest" \
-            --arg cmd6 "sudo docker ps" \
-            '{commands: [$cmd1, $cmd2, $cmd3, $cmd4, $cmd5, $cmd6]}' > "$WORKER_PARAMS_FILE"
+            --arg cmd1 "aws ecr get-login-password --region ${{ env.AWS_REGION }} | sudo -u ec2-user docker login --username AWS --password-stdin ${{ secrets.ECR_REGISTRY }}" \
+            --arg cmd2 "sudo -u ec2-user docker pull ${{ secrets.ECR_REGISTRY }}/${{ env.ECR_WORKER_REPO }}:latest" \
+            --arg cmd3 "sudo systemctl restart proyecto1-worker.service" \
+            --arg cmd4 "sleep 10" \
+            --arg cmd5 "sudo systemctl status proyecto1-worker.service --no-pager" \
+            --arg cmd6 "sudo docker ps | grep worker || echo 'Worker container not running'" \
+            --arg cmd7 "sudo docker logs proyecto1-worker-aws --tail 20 2>&1 || echo 'No logs yet'" \
+            '{commands: [$cmd1, $cmd2, $cmd3, $cmd4, $cmd5, $cmd6, $cmd7]}' > "$WORKER_PARAMS_FILE"
           
-          # Send restart command via SSM
-          echo "Restarting worker via SSM..."
+          # Send deployment command via SSM
+          echo "Deploying worker via SSM..."
           WORKER_COMMAND_ID=$(aws ssm send-command \
             --instance-ids "$WORKER_INSTANCE_ID" \
             --document-name "AWS-RunShellScript" \
@@ -437,7 +438,7 @@ jobs:
           echo "Worker command ID: $WORKER_COMMAND_ID"
           
           # Wait for command to complete
-          echo "Waiting for worker restart to complete..."
+          echo "Waiting for worker deployment to complete..."
           aws ssm wait command-executed \
             --command-id "$WORKER_COMMAND_ID" \
             --instance-id "$WORKER_INSTANCE_ID" \
@@ -452,7 +453,7 @@ jobs:
             --output text)
           
           if [ "$WORKER_STATUS" != "Success" ]; then
-            echo "❌ Worker restart failed with status: $WORKER_STATUS"
+            echo "❌ Worker deployment failed with status: $WORKER_STATUS"
             aws ssm get-command-invocation \
               --command-id "$WORKER_COMMAND_ID" \
               --instance-id "$WORKER_INSTANCE_ID" \
@@ -461,7 +462,7 @@ jobs:
               --output text
             exit 1
           else
-            echo "✅ Worker restarted successfully"
+            echo "✅ Worker deployed successfully"
           fi
 
       - name: Health Check
