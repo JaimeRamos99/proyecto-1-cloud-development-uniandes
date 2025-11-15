@@ -50,14 +50,7 @@ resource "aws_security_group" "web_server" {
   description = "Security group for web server (API + Nginx)"
   vpc_id      = data.aws_vpc.default.id
 
-  # SSH access
-  ingress {
-    description = "SSH from allowed CIDR"
-    from_port   = 22
-    to_port     = 22
-    protocol    = "tcp"
-    cidr_blocks = [var.allowed_ssh_cidr]
-  }
+ 
 
   # HTTP access from internet (direct access without ALB)
   ingress {
@@ -91,35 +84,6 @@ resource "aws_security_group" "web_server" {
   }
 }
 
-# Worker Security Group
-resource "aws_security_group" "worker" {
-  name        = "${var.project_name}-worker-sg"
-  description = "Security group for worker (video processing)"
-  vpc_id      = data.aws_vpc.default.id
-
-  # SSH access
-  ingress {
-    description = "SSH from allowed CIDR"
-    from_port   = 22
-    to_port     = 22
-    protocol    = "tcp"
-    cidr_blocks = [var.allowed_ssh_cidr]
-  }
-
-  # Allow all outbound traffic
-  egress {
-    description = "Allow all outbound traffic"
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  tags = {
-    Name = "${var.project_name}-worker-sg"
-  }
-}
-
 # RDS Security Group
 resource "aws_security_group" "rds" {
   name        = "${var.project_name}-rds-sg"
@@ -133,15 +97,6 @@ resource "aws_security_group" "rds" {
     to_port         = 5432
     protocol        = "tcp"
     security_groups = [aws_security_group.web_server.id]
-  }
-
-  # PostgreSQL access from worker
-  ingress {
-    description     = "PostgreSQL from worker"
-    from_port       = 5432
-    to_port         = 5432
-    protocol        = "tcp"
-    security_groups = [aws_security_group.worker.id]
   }
 
   # PostgreSQL access from allowed CIDR (for management)

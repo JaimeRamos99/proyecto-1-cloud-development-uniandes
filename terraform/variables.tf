@@ -29,7 +29,7 @@ variable "key_pair_name" {
 variable "web_server_instance_type" {
   description = "EC2 instance type for web server (API + Nginx)"
   type        = string
-  default     = "t3.small"  # 2 vCPU, 2 GiB RAM
+  default     = "t3.small" # 2 vCPU, 2 GiB RAM
 }
 
 variable "worker_instance_type" {
@@ -47,7 +47,7 @@ variable "root_volume_size" {
 variable "allowed_ssh_cidr" {
   description = "CIDR block allowed to SSH into EC2 instances (use your IP/32)"
   type        = string
-  default     = "0.0.0.0/0"  # WARNING: Change this to your IP for security
+  default     = "0.0.0.0/0" # WARNING: Change this to your IP for security
 }
 
 # RDS Configuration
@@ -103,13 +103,13 @@ variable "sqs_queue_name" {
 variable "sqs_visibility_timeout" {
   description = "SQS message visibility timeout in seconds"
   type        = number
-  default     = 900  # 15 minutes (enough for video processing)
+  default     = 900 # 15 minutes (enough for video processing)
 }
 
 variable "sqs_message_retention" {
   description = "SQS message retention period in seconds"
   type        = number
-  default     = 1209600  # 14 days
+  default     = 1209600 # 14 days
 }
 
 # Application Configuration

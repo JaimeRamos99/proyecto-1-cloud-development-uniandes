@@ -18,16 +18,6 @@ output "web_server_asg_id" {
   value       = aws_autoscaling_group.web_server.id
 }
 
-output "worker_public_ip" {
-  description = "Public IP address of the worker"
-  value       = aws_instance.worker.public_ip
-}
-
-output "worker_private_ip" {
-  description = "Private IP address of the worker"
-  value       = aws_instance.worker.private_ip
-}
-
 # RDS Database
 output "rds_endpoint" {
   description = "Full RDS endpoint (includes port)"
@@ -105,11 +95,6 @@ output "web_server_security_group_id" {
   value       = aws_security_group.web_server.id
 }
 
-output "worker_security_group_id" {
-  description = "Security group ID for worker"
-  value       = aws_security_group.worker.id
-}
-
 output "rds_security_group_id" {
   description = "Security group ID for RDS"
   value       = aws_security_group.rds.id
@@ -121,28 +106,13 @@ output "web_server_iam_role_arn" {
   value       = aws_iam_role.web_server.arn
 }
 
-output "worker_iam_role_arn" {
-  description = "IAM role ARN for worker"
-  value       = aws_iam_role.worker.arn
-}
-
 # Region
 output "aws_region" {
   description = "AWS region"
   value       = var.aws_region
 }
 
-# SSH Commands
-# Note: With ASG, instances have dynamic IPs. Use AWS Systems Manager Session Manager instead.
-output "ssh_web_server_note" {
-  description = "Note about accessing web server instances"
-  value       = "Use AWS Systems Manager Session Manager to access instances. Instances are managed by ASG: ${aws_autoscaling_group.web_server.id}"
-}
 
-output "ssh_worker" {
-  description = "SSH command for worker"
-  value       = "ssh -i ~/.ssh/${var.key_pair_name}.pem ec2-user@${aws_instance.worker.public_ip}"
-}
 
 # Application URL
 output "application_url" {
@@ -153,7 +123,7 @@ output "application_url" {
 # Deployment Summary
 output "deployment_summary" {
   description = "Summary of deployed infrastructure"
-  value = <<-EOT
+  value       = <<-EOT
     
     ============================================
     🎉 Deployment Complete!
@@ -170,11 +140,13 @@ output "deployment_summary" {
     ├─ Desired:    ${var.web_server_asg_desired_capacity}
     └─ Access:     Use AWS Systems Manager Session Manager
     
-    ⚙️  Worker
-    ├─ Public IP:  ${aws_instance.worker.public_ip}
-    ├─ Private IP: ${aws_instance.worker.private_ip}
-    ├─ Instance:   ${aws_instance.worker.instance_type}
-    └─ SSH:        ssh -i ~/.ssh/${var.key_pair_name}.pem ec2-user@${aws_instance.worker.public_ip}
+    ⚙️  Lambda Worker
+    ├─ Function:   ${aws_lambda_function.video_processor.function_name}
+    ├─ Runtime:    ${aws_lambda_function.video_processor.package_type}
+    ├─ Memory:     ${aws_lambda_function.video_processor.memory_size} MB
+    ├─ Timeout:    ${aws_lambda_function.video_processor.timeout}s
+    ├─ Log Group:  ${aws_cloudwatch_log_group.lambda_worker.name}
+    └─ Max Concurrency: ${aws_lambda_function.video_processor.reserved_concurrent_executions}
     
     🗄️  Database (RDS)
     ├─ Endpoint:   ${aws_db_instance.main.endpoint}

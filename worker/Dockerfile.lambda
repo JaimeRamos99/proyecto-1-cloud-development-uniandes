@@ -1,0 +1,93 @@
+# Lambda Dockerfile for Video Processing Worker
+# Uses AWS Lambda Go base image with FFmpeg for video processing
+
+# Build stage - compile Go binary
+FROM golang:1.23.12-alpine AS builder
+
+WORKDIR /app
+
+# Install build dependencies
+RUN apk add --no-cache gcc musl-dev
+
+# Copy go mod files and download dependencies
+COPY go.mod go.sum ./
+RUN go mod download
+
+# Copy source code
+COPY . .
+
+# Build Lambda handler
+# Lambda requires the binary to be named "bootstrap"
+# CGO_ENABLED=1 is required for database/sql with lib/pq
+RUN CGO_ENABLED=1 GOOS=linux GOARCH=amd64 go build \
+    -tags lambda.norpc \
+    -ldflags="-s -w" \
+    -o bootstrap \
+    cmd/lambda/main.go
+
+# Final stage - AWS Lambda Go runtime
+FROM public.ecr.aws/lambda/go:1
+
+# Install FFmpeg and ImageMagick for video processing
+# Using static FFmpeg build for better compatibility
+RUN yum install -y wget tar xz && \
+    cd /tmp && \
+    wget -q https://johnvansickle.com/ffmpeg/releases/ffmpeg-release-amd64-static.tar.xz && \
+    tar xf ffmpeg-release-amd64-static.tar.xz && \
+    mv ffmpeg-*-amd64-static/ffmpeg /usr/local/bin/ && \
+    mv ffmpeg-*-amd64-static/ffprobe /usr/local/bin/ && \
+    chmod +x /usr/local/bin/ffmpeg /usr/local/bin/ffprobe && \
+    rm -rf /tmp/ffmpeg* && \
+    yum clean all && \
+    rm -rf /var/cache/yum
+
+# Verify FFmpeg installation
+RUN ffmpeg -version && ffprobe -version
+
+# Create assets directory
+RUN mkdir -p /app/assets
+
+# Copy video processing assets from repository
+COPY assets/ /app/assets/
+
+# Install ImageMagick for watermark generation (if needed)
+RUN yum install -y ImageMagick && yum clean all
+
+# Generate ANB watermark if it doesn't exist
+RUN if [ ! -f /app/assets/watermark.png ]; then \
+        convert -size 200x50 xc:none \
+            -font Arial-Bold -pointsize 24 \
+            -fill 'rgba(255,255,255,0.8)' \
+            -stroke 'rgba(0,0,0,0.5)' -strokewidth 1 \
+            -gravity center -annotate 0 "ANB" \
+            /app/assets/watermark.png || \
+            echo "Warning: Could not create watermark"; \
+    fi
+
+# Generate ANB bumpers (intro/outro) if they don't exist
+RUN if [ ! -f /app/assets/intro.mp4 ] || [ ! -f /app/assets/outro.mp4 ]; then \
+        if [ -f /app/assets/create_bumpers.sh ]; then \
+            cd /app/assets && sh create_bumpers.sh || \
+            echo "Warning: Could not create bumpers"; \
+        fi; \
+    fi
+
+# List assets to verify
+RUN echo "Assets directory contents:" && ls -lh /app/assets/
+
+# Copy the Lambda handler binary from builder stage
+COPY --from=builder /app/bootstrap ${LAMBDA_TASK_ROOT}/bootstrap
+
+# Ensure bootstrap has execute permissions
+RUN chmod 755 ${LAMBDA_TASK_ROOT}/bootstrap
+
+# Lambda uses /tmp for temporary files
+# Lambda provides 10GB of /tmp storage by default
+RUN mkdir -p /tmp && chmod 1777 /tmp
+
+# Set environment variable for assets location
+ENV ASSETS_PATH=/app/assets
+
+# Lambda will invoke the bootstrap binary
+CMD [ "bootstrap" ]
+
