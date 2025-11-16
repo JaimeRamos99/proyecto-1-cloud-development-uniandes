@@ -26,19 +26,19 @@ resource "aws_launch_template" "web_server" {
   }
 
   user_data = base64encode(templatefile("${path.module}/user-data-web-server.sh", {
-    aws_region          = var.aws_region
-    ecr_api_url         = aws_ecr_repository.api.repository_url
-    ecr_image_tag       = var.ecr_image_tag
-    db_host             = aws_db_instance.main.address
-    db_port             = aws_db_instance.main.port
-    db_name             = var.db_name
-    db_user             = var.db_username
-    db_password         = var.db_password
-    jwt_secret          = var.jwt_secret
-    s3_bucket_name      = aws_s3_bucket.videos.id
-    sqs_queue_url       = aws_sqs_queue.video_processing.url
-    sqs_queue_name      = var.sqs_queue_name
-    project_name        = var.project_name
+    aws_region     = var.aws_region
+    ecr_api_url    = aws_ecr_repository.api.repository_url
+    ecr_image_tag  = var.ecr_image_tag
+    db_host        = aws_db_instance.main.address
+    db_port        = aws_db_instance.main.port
+    db_name        = var.db_name
+    db_user        = var.db_username
+    db_password    = var.db_password
+    jwt_secret     = var.jwt_secret
+    s3_bucket_name = aws_s3_bucket.videos.id
+    sqs_queue_url  = aws_sqs_queue.video_processing.url
+    sqs_queue_name = var.sqs_queue_name
+    project_name   = var.project_name
   }))
 
   tag_specifications {
@@ -114,10 +114,10 @@ resource "aws_lb_listener" "web_server" {
 
 # Auto Scaling Group
 resource "aws_autoscaling_group" "web_server" {
-  name                = "${var.project_name}-web-server-asg"
-  vpc_zone_identifier = data.aws_subnets.default.ids
-  target_group_arns   = [aws_lb_target_group.web_server.arn]
-  health_check_type   = "ELB"
+  name                      = "${var.project_name}-web-server-asg"
+  vpc_zone_identifier       = data.aws_subnets.default.ids
+  target_group_arns         = [aws_lb_target_group.web_server.arn]
+  health_check_type         = "ELB"
   health_check_grace_period = 300
 
   min_size         = var.web_server_asg_min_size

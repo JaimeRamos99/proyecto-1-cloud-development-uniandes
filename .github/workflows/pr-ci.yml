@@ -131,6 +131,7 @@ jobs:
           DATABASE_URL: postgres://postgres:postgres@localhost:5432/proyecto_1_test?sslmode=disable
         run: go test -v ./...
 
-      - name: 🔨 Build
+      - name: 🔨 Build Lambda Worker
         working-directory: ./worker
-        run: go build -o bin/worker ./cmd/worker
+        run: go build -o bin/lambda ./cmd/lambda
+

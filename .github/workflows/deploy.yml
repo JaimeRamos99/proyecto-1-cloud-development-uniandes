@@ -48,15 +48,16 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      - name: Build and push Worker image
+      - name: Build and push Lambda Worker image
         uses: docker/build-push-action@v5
         with:
           context: ./worker
+          file: ./worker/Dockerfile.lambda
           platforms: linux/amd64
           push: true
           tags: |
-            ${{ secrets.ECR_REGISTRY }}/${{ env.ECR_WORKER_REPO }}:${{ github.sha }}
-            ${{ secrets.ECR_REGISTRY }}/${{ env.ECR_WORKER_REPO }}:latest
+            ${{ secrets.ECR_REGISTRY }}/${{ env.ECR_WORKER_REPO }}:lambda-${{ github.sha }}
+            ${{ secrets.ECR_REGISTRY }}/${{ env.ECR_WORKER_REPO }}:lambda
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -317,152 +318,40 @@ jobs:
           
           echo "✅ All instances deployed successfully!"
 
-      - name: Deploy Worker Service
+      - name: Update Lambda Worker Function
         run: |
-          # Get worker instance ID by tag
-          echo "Finding worker instance..."
-          WORKER_INSTANCE_ID=$(aws ec2 describe-instances \
-            --filters "Name=tag:Name,Values=proyecto1-worker" "Name=instance-state-name,Values=running" \
-            --region ${{ env.AWS_REGION }} \
-            --query 'Reservations[0].Instances[0].InstanceId' \
-            --output text)
+          echo "🚀 Updating Lambda worker function..."
           
-          if [ -z "$WORKER_INSTANCE_ID" ] || [ "$WORKER_INSTANCE_ID" = "None" ]; then
-            echo "❌ Worker instance not found"
-            exit 1
-          fi
+          # Check if Lambda function exists
+          LAMBDA_EXISTS=$(aws lambda get-function \
+            --function-name proyecto1-video-processor \
+            --region ${{ env.AWS_REGION }} 2>&1 || echo "NOT_FOUND")
           
-          echo "Found worker instance: $WORKER_INSTANCE_ID"
-          
-          # Check if IAM role has SSM policy attached
-          echo "Checking IAM role permissions..."
-          INSTANCE_PROFILE_ARN=$(aws ec2 describe-instances \
-            --instance-ids "$WORKER_INSTANCE_ID" \
-            --region ${{ env.AWS_REGION }} \
-            --query 'Reservations[0].Instances[0].IamInstanceProfile.Arn' \
-            --output text)
-          
-          if [ -n "$INSTANCE_PROFILE_ARN" ] && [ "$INSTANCE_PROFILE_ARN" != "None" ]; then
-            INSTANCE_PROFILE_NAME=$(echo "$INSTANCE_PROFILE_ARN" | cut -d'/' -f2)
-            WORKER_ROLE_NAME=$(aws iam get-instance-profile \
-              --instance-profile-name "$INSTANCE_PROFILE_NAME" \
-              --query 'InstanceProfile.Roles[0].RoleName' \
-              --output text 2>/dev/null)
+          if echo "$LAMBDA_EXISTS" | grep -q "ResourceNotFoundException\|NOT_FOUND"; then
+            echo "⚠️  Lambda function not found. Skipping Lambda update."
+            echo "   Run 'terraform apply' to create the Lambda function first."
           else
-            WORKER_ROLE_NAME="proyecto1-worker-role"  # Fallback to expected name
-          fi
-          
-          if [ -n "$WORKER_ROLE_NAME" ] && [ "$WORKER_ROLE_NAME" != "None" ]; then
-            echo "Worker IAM role: $WORKER_ROLE_NAME"
-            # Check if SSM policy is attached
-            SSM_POLICY_ATTACHED=$(aws iam list-attached-role-policies \
-              --role-name "$WORKER_ROLE_NAME" \
-              --query 'AttachedPolicies[?PolicyArn==`arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore`]' \
-              --output text 2>/dev/null)
+            echo "✅ Lambda function exists. Updating with new image..."
             
-            if [ -z "$SSM_POLICY_ATTACHED" ]; then
-              echo "⚠️  SSM policy not attached to worker role. Attempting to attach..."
-              if aws iam attach-role-policy \
-                --role-name "$WORKER_ROLE_NAME" \
-                --policy-arn "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore" 2>/dev/null; then
-                echo "✅ Successfully attached SSM policy"
-                echo "⏳ Waiting 30 seconds for policy to propagate..."
-                sleep 30
-              else
-                echo "⚠️  Failed to attach policy automatically (may need manual intervention or Terraform apply)"
-              fi
-            else
-              echo "✅ SSM policy is attached to worker role"
-            fi
-          fi
-          
-          # Wait for instance to be ready for SSM
-          echo "Waiting for worker instance to be ready for SSM..."
-          MAX_WAIT=300  # 5 minutes
-          WAIT_COUNT=0
-          while [ $WAIT_COUNT -lt $MAX_WAIT ]; do
-            PING_STATUS=$(aws ssm describe-instance-information \
-              --filters "Key=InstanceIds,Values=$WORKER_INSTANCE_ID" \
-              --region ${{ env.AWS_REGION }} \
-              --query 'InstanceInformationList[0].PingStatus' \
-              --output text 2>/dev/null)
+            # Update Lambda function with new image
+            aws lambda update-function-code \
+              --function-name proyecto1-video-processor \
+              --image-uri ${{ secrets.ECR_REGISTRY }}/${{ env.ECR_WORKER_REPO }}:lambda \
+              --region ${{ env.AWS_REGION }}
             
-            if [ "$PING_STATUS" = "Online" ]; then
-              echo "✅ Worker instance is ready for SSM"
-              break
-            else
-              WAIT_COUNT=$((WAIT_COUNT + 10))
-              if [ $WAIT_COUNT -lt $MAX_WAIT ]; then
-                echo "⏳ Waiting for SSM agent to be ready... ($WAIT_COUNT/$MAX_WAIT seconds) [Status: ${PING_STATUS:-NotRegistered}]"
-                sleep 10
-              else
-                echo "❌ Worker instance did not become ready for SSM within $MAX_WAIT seconds"
-                echo "   Current status: ${PING_STATUS:-NotRegistered}"
-                echo ""
-                echo "   To fix this issue:"
-                echo "   1. Apply Terraform changes: cd terraform && terraform apply"
-                echo "   2. Or manually attach policy:"
-                echo "      aws iam attach-role-policy --role-name proyecto1-worker-role --policy-arn arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
-                echo "   3. Then reboot the instance:"
-                echo "      aws ec2 reboot-instances --instance-ids $WORKER_INSTANCE_ID"
-                exit 1
-              fi
-            fi
-          done
-          
-          # Create temporary file for SSM parameters
-          WORKER_PARAMS_FILE=$(mktemp)
-          jq -n \
-            --arg cmd1 "aws ecr get-login-password --region ${{ env.AWS_REGION }} | sudo -u ec2-user docker login --username AWS --password-stdin ${{ secrets.ECR_REGISTRY }}" \
-            --arg cmd2 "sudo -u ec2-user docker pull ${{ secrets.ECR_REGISTRY }}/${{ env.ECR_WORKER_REPO }}:latest" \
-            --arg cmd3 "sudo systemctl restart proyecto1-worker.service" \
-            --arg cmd4 "sleep 10" \
-            --arg cmd5 "sudo systemctl status proyecto1-worker.service --no-pager" \
-            --arg cmd6 "sudo docker ps | grep worker || echo 'Worker container not running'" \
-            --arg cmd7 "sudo docker logs proyecto1-worker-aws --tail 20 2>&1 || echo 'No logs yet'" \
-            '{commands: [$cmd1, $cmd2, $cmd3, $cmd4, $cmd5, $cmd6, $cmd7]}' > "$WORKER_PARAMS_FILE"
-          
-          # Send deployment command via SSM
-          echo "Deploying worker via SSM..."
-          WORKER_COMMAND_ID=$(aws ssm send-command \
-            --instance-ids "$WORKER_INSTANCE_ID" \
-            --document-name "AWS-RunShellScript" \
-            --parameters file://"$WORKER_PARAMS_FILE" \
-            --region ${{ env.AWS_REGION }} \
-            --query 'Command.CommandId' \
-            --output text)
-          
-          # Clean up temp file
-          rm -f "$WORKER_PARAMS_FILE"
-          
-          echo "Worker command ID: $WORKER_COMMAND_ID"
-          
-          # Wait for command to complete
-          echo "Waiting for worker deployment to complete..."
-          aws ssm wait command-executed \
-            --command-id "$WORKER_COMMAND_ID" \
-            --instance-id "$WORKER_INSTANCE_ID" \
-            --region ${{ env.AWS_REGION }} || true
-          
-          # Check command status
-          WORKER_STATUS=$(aws ssm get-command-invocation \
-            --command-id "$WORKER_COMMAND_ID" \
-            --instance-id "$WORKER_INSTANCE_ID" \
-            --region ${{ env.AWS_REGION }} \
-            --query 'Status' \
-            --output text)
-          
-          if [ "$WORKER_STATUS" != "Success" ]; then
-            echo "❌ Worker deployment failed with status: $WORKER_STATUS"
-            aws ssm get-command-invocation \
-              --command-id "$WORKER_COMMAND_ID" \
-              --instance-id "$WORKER_INSTANCE_ID" \
+            echo "⏳ Waiting for Lambda update to complete..."
+            aws lambda wait function-updated \
+              --function-name proyecto1-video-processor \
+              --region ${{ env.AWS_REGION }}
+            
+            echo "✅ Lambda function updated successfully!"
+            
+            # Get Lambda function info
+            aws lambda get-function \
+              --function-name proyecto1-video-processor \
               --region ${{ env.AWS_REGION }} \
-              --query 'StandardErrorContent' \
-              --output text
-            exit 1
-          else
-            echo "✅ Worker deployed successfully"
+              --query '{FunctionName:Configuration.FunctionName,Runtime:Configuration.PackageType,Timeout:Configuration.Timeout,Memory:Configuration.MemorySize,LastModified:Configuration.LastModified}' \
+              --output table
           fi
 
       - name: Health Check
