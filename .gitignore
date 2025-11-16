@@ -165,3 +165,9 @@ docs/Entrega_2/pruebas-de-carga/reportes/*/*.jtl
 
 !docs/Entrega_2/pruebas-de-carga/reportes/summary/
 !docs/Entrega_2/pruebas-de-carga/reportes/simple-report*.html
+
+docs/Entrega_3/pruebas-de-carga/reportes/*/html_*/
+docs/Entrega_3/pruebas-de-carga/reportes/*/*.jtl
+
+!docs/Entrega_3/pruebas-de-carga/reportes/summary/
+!docs/Entrega_3/pruebas-de-carga/reportes/simple-report*.html
