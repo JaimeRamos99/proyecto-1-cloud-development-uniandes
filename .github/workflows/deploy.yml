@@ -53,8 +53,8 @@ jobs:
         with:
           context: ./worker
           file: ./worker/Dockerfile.lambda
-          platforms: linux/amd64
           push: true
+          provenance: false
           tags: |
             ${{ secrets.ECR_REGISTRY }}/${{ env.ECR_WORKER_REPO }}:lambda-${{ github.sha }}
             ${{ secrets.ECR_REGISTRY }}/${{ env.ECR_WORKER_REPO }}:lambda

@@ -40,10 +40,9 @@ resource "aws_lambda_function" "video_processor" {
       DB_MAX_OPEN_CONNS = "10"
       DB_MAX_IDLE_CONNS = "5"
 
-      # AWS configuration
-      AWS_DEFAULT_REGION = var.aws_region
-      S3_BUCKET_NAME     = aws_s3_bucket.videos.id
-      SQS_QUEUE_NAME     = var.sqs_queue_name
+      # AWS configuration (AWS_DEFAULT_REGION is reserved and automatically set by Lambda)
+      S3_BUCKET_NAME = aws_s3_bucket.videos.id
+      SQS_QUEUE_NAME = var.sqs_queue_name
 
       # App configuration
       APP_NAME    = "Proyecto_1_Lambda_Worker"
