@@ -68,17 +68,17 @@ func Load() *Config {
 			MaxOpenConns: getEnvInt("DB_MAX_OPEN_CONNS", 25),
 			MaxIdleConns: getEnvInt("DB_MAX_IDLE_CONNS", 5),
 		},
-	AWS: AWSConfig{
-		// DO NOT read AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY from env
-		// Lambda execution role credentials will be used automatically
-		AccessKeyID:     "", // Leave empty to use IAM role
-		SecretAccessKey: "", // Leave empty to use IAM role
-		Region:          getEnv("AWS_REGION", "us-east-1"),
-		EndpointURL:     getEnv("AWS_ENDPOINT_URL", ""), // Empty for real AWS
-		S3BucketName:    getEnv("S3_BUCKET_NAME", "proyecto1-videos"),
-		SQSQueueName:    getEnv("SQS_QUEUE_NAME", "proyecto1-video-processing"),
-		DLQQueueName:    getEnv("DLQ_QUEUE_NAME", "proyecto1-video-processing-dlq"),
-	},
+		AWS: AWSConfig{
+			// DO NOT read AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY from env
+			// Lambda execution role credentials will be used automatically
+			AccessKeyID:     "", // Leave empty to use IAM role
+			SecretAccessKey: "", // Leave empty to use IAM role
+			Region:          getEnv("AWS_REGION", "us-east-1"),
+			EndpointURL:     getEnv("AWS_ENDPOINT_URL", ""), // Empty for real AWS
+			S3BucketName:    getEnv("S3_BUCKET_NAME", "proyecto1-videos"),
+			SQSQueueName:    getEnv("SQS_QUEUE_NAME", "proyecto1-video-processing"),
+			DLQQueueName:    getEnv("DLQ_QUEUE_NAME", "proyecto1-video-processing-dlq"),
+		},
 		Retry: RetryConfig{
 			MaxRetries:    getEnvInt("WORKER_MAX_RETRIES", 3),
 			BaseDelay:     getEnvInt("WORKER_BASE_DELAY", 2), // 2 seconds base delay
