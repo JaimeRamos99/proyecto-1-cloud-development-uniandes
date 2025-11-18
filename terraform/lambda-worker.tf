@@ -24,8 +24,8 @@ resource "aws_lambda_function" "video_processor" {
     size = 10240 # 10GB (maximum for Lambda)
   }
 
-  # Reserved concurrent executions (conservative limit)
-  reserved_concurrent_executions = 10
+  # Use unreserved concurrency pool (scaling controlled by SQS event source mapping)
+  # reserved_concurrent_executions = 10  # Removed to avoid account quota issues
 
   # Environment variables
   environment {

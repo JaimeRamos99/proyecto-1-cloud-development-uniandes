@@ -76,10 +76,14 @@ RUN if [ ! -f /app/assets/intro.mp4 ] || [ ! -f /app/assets/outro.mp4 ]; then \
 RUN echo "Assets directory contents:" && ls -lh /app/assets/
 
 # Copy the Lambda handler binary from builder stage
-COPY --from=builder /app/bootstrap ${LAMBDA_TASK_ROOT}/bootstrap
+# For AWS Lambda Go runtime, the binary must be at /var/task/bootstrap
+COPY --from=builder /app/bootstrap /var/task/bootstrap
 
 # Ensure bootstrap has execute permissions
-RUN chmod 755 ${LAMBDA_TASK_ROOT}/bootstrap
+RUN chmod +x /var/task/bootstrap
+
+# Verify bootstrap exists and is executable
+RUN ls -lh /var/task/bootstrap && /var/task/bootstrap --version || echo "Bootstrap binary ready"
 
 # Lambda uses /tmp for temporary files
 # Lambda provides 10GB of /tmp storage by default
@@ -88,6 +92,7 @@ RUN mkdir -p /tmp && chmod 1777 /tmp
 # Set environment variable for assets location
 ENV ASSETS_PATH=/app/assets
 
-# Lambda will invoke the bootstrap binary
+# Set the CMD to the handler (required by AWS Lambda)
+# The handler name for Go Lambda is the function handler
 CMD [ "bootstrap" ]
 
