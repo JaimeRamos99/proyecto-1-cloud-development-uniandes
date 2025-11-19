@@ -18,7 +18,7 @@ dnf update -y
 
 # Install required packages
 echo "Installing required packages..."
-dnf install -y docker unzip curl wget
+dnf install -y docker unzip wget
 
 # Install Docker
 echo "Installing Docker..."
