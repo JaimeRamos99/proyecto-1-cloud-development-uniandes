@@ -129,19 +129,30 @@ variable "ecr_image_tag" {
 variable "web_server_asg_min_size" {
   description = "Minimum number of instances in the Auto Scaling Group"
   type        = number
-  default     = 1
+  default     = 2 # Changed to 2 for multi-AZ deployment
 }
 
 variable "web_server_asg_max_size" {
   description = "Maximum number of instances in the Auto Scaling Group"
   type        = number
-  default     = 3
+  default     = 4
 }
 
 variable "web_server_asg_desired_capacity" {
   description = "Desired number of instances in the Auto Scaling Group"
   type        = number
-  default     = 1
+  default     = 2 # Changed to 2 for multi-AZ deployment
+}
+
+variable "number_of_azs" {
+  description = "Number of Availability Zones to deploy across"
+  type        = number
+  default     = 2 # Deploy across 2 AZs for high availability
+
+  validation {
+    condition     = var.number_of_azs >= 2 && var.number_of_azs <= 3
+    error_message = "Number of AZs must be between 2 and 3 for high availability."
+  }
 }
 
 # Tags

@@ -55,8 +55,9 @@ resource "aws_lambda_function" "video_processor" {
   }
 
   # VPC configuration (required for RDS access)
+  # Deployed across multiple AZs for high availability
   vpc_config {
-    subnet_ids         = data.aws_subnets.default.ids
+    subnet_ids         = data.aws_subnets.multi_az.ids
     security_group_ids = [aws_security_group.lambda_worker.id]
   }
 

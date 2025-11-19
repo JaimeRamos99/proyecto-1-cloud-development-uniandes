@@ -50,7 +50,7 @@ resource "aws_security_group" "web_server" {
   description = "Security group for web server (API + Nginx)"
   vpc_id      = data.aws_vpc.default.id
 
- 
+
 
   # HTTP access from internet (direct access without ALB)
   ingress {

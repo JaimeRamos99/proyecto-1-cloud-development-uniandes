@@ -18,6 +18,17 @@ output "web_server_asg_id" {
   value       = aws_autoscaling_group.web_server.id
 }
 
+# Availability Zones
+output "availability_zones" {
+  description = "Availability Zones being used for deployment"
+  value       = slice(data.aws_availability_zones.available.names, 0, var.number_of_azs)
+}
+
+output "subnet_ids" {
+  description = "Subnet IDs across multiple AZs"
+  value       = data.aws_subnets.multi_az.ids
+}
+
 # RDS Database
 output "rds_endpoint" {
   description = "Full RDS endpoint (includes port)"
@@ -138,6 +149,7 @@ output "deployment_summary" {
     ├─ Min Size:   ${var.web_server_asg_min_size}
     ├─ Max Size:   ${var.web_server_asg_max_size}
     ├─ Desired:    ${var.web_server_asg_desired_capacity}
+    ├─ Multi-AZ:   Deployed across ${var.number_of_azs} Availability Zones
     └─ Access:     Use AWS Systems Manager Session Manager
     
     ⚙️  Lambda Worker

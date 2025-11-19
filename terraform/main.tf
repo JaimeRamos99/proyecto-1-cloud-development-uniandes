@@ -47,11 +47,17 @@ data "aws_ami" "amazon_linux_2023" {
   }
 }
 
-# Default VPC subnets for Auto Scaling Group
-data "aws_subnets" "default" {
+# Get subnets from multiple Availability Zones for high availability
+# This ensures instances are distributed across different AZs
+data "aws_subnets" "multi_az" {
   filter {
     name   = "vpc-id"
     values = [data.aws_vpc.default.id]
+  }
+
+  filter {
+    name   = "availability-zone"
+    values = slice(data.aws_availability_zones.available.names, 0, var.number_of_azs)
   }
 }
 

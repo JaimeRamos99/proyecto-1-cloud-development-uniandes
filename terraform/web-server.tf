@@ -59,12 +59,13 @@ resource "aws_launch_template" "web_server" {
 }
 
 # Application Load Balancer
+# Deployed across multiple AZs for high availability
 resource "aws_lb" "web_server" {
   name               = "${var.project_name}-web-server-alb"
   internal           = false
   load_balancer_type = "application"
   security_groups    = [aws_security_group.alb.id]
-  subnets            = data.aws_subnets.default.ids
+  subnets            = data.aws_subnets.multi_az.ids
 
   enable_deletion_protection = false
 
@@ -113,9 +114,10 @@ resource "aws_lb_listener" "web_server" {
 }
 
 # Auto Scaling Group
+# Instances are distributed across multiple AZs for high availability
 resource "aws_autoscaling_group" "web_server" {
   name                      = "${var.project_name}-web-server-asg"
-  vpc_zone_identifier       = data.aws_subnets.default.ids
+  vpc_zone_identifier       = data.aws_subnets.multi_az.ids
   target_group_arns         = [aws_lb_target_group.web_server.arn]
   health_check_type         = "ELB"
   health_check_grace_period = 300
