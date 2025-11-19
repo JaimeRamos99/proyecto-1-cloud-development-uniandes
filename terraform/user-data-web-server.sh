@@ -16,9 +16,12 @@ echo "==================================="
 echo "Updating system packages..."
 dnf update -y
 
+# Install required packages
+echo "Installing required packages..."
+dnf install -y docker unzip curl wget
+
 # Install Docker
 echo "Installing Docker..."
-dnf install -y docker
 systemctl start docker
 systemctl enable docker
 usermod -aG docker ec2-user
@@ -119,15 +122,84 @@ systemctl enable amazon-ssm-agent || true
 systemctl start amazon-ssm-agent || true
 systemctl status amazon-ssm-agent || echo "SSM agent status check failed, but continuing..."
 
-# Note: Images need to be built and pushed before this will work
-# The containers will be started manually after deployment
+# Download nginx configuration from S3 or create a basic one
+echo "Creating nginx configuration..."
+cat > nginx.aws.conf << 'NGINX_EOF'
+events {
+    worker_connections 1024;
+}
+
+http {
+    upstream api {
+        server 127.0.0.1:8080;
+    }
+
+    server {
+        listen 80;
+        server_name _;
+
+        # Health check endpoint for ALB
+        location /api/health {
+            proxy_pass http://api/api/health;
+            proxy_http_version 1.1;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+        }
+
+        # Nginx health check endpoint
+        location /nginx-health {
+            access_log off;
+            return 200 "healthy\n";
+            add_header Content-Type text/plain;
+        }
+
+        # API endpoints
+        location /api/ {
+            proxy_pass http://api;
+            proxy_http_version 1.1;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+            proxy_set_header Upgrade $http_upgrade;
+            proxy_set_header Connection "upgrade";
+            client_max_body_size 100M;
+        }
+    }
+}
+NGINX_EOF
+
+chown ec2-user:ec2-user nginx.aws.conf
+
+# Pull and start containers
+echo "Starting Docker containers..."
+cd /home/ec2-user/proyecto1
+export ECR_API_URL="${ecr_api_url}"
+export ECR_IMAGE_TAG="${ecr_image_tag}"
+
+# Pull the images first
+echo "Pulling Docker images..."
+docker pull ${ecr_api_url}:${ecr_image_tag} || echo "Failed to pull API image, but continuing..."
+docker pull nginx:alpine
+
+# Start the containers
+echo "Starting containers with docker-compose..."
+docker-compose up -d
+
+# Wait for containers to be healthy
+echo "Waiting for containers to be healthy..."
+sleep 30
+
+# Check container status
+docker-compose ps
 
 echo "==================================="
 echo "Web Server Initialization Complete"
 echo "==================================="
-echo "Next steps:"
-echo "1. Push API Docker image to ECR"
-echo "2. Copy nginx.config"
-echo "3. Run: docker-compose up -d"
+echo "Containers should be running now"
+echo "Check status: docker-compose ps"
+echo "Check logs: docker-compose logs"
 echo "Note: Frontend is served from CloudFront/S3"
 
