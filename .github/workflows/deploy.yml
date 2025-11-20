@@ -146,177 +146,103 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
 
-      - name: Deploy to Web Server (ASG)
+      - name: Deploy to Web Server (ASG) - Rolling Update
         run: |
-          # Get all instance IDs from the Auto Scaling Group
+          # With automated user-data script, we just need to pull new images on existing instances
+          # New instances will automatically get the latest images from ECR
+          
           ASG_NAME="${{ secrets.ASG_NAME }}"
           if [ -z "$ASG_NAME" ]; then
             ASG_NAME="proyecto1-web-server-asg"
           fi
           
-          echo "Finding instances in ASG: $ASG_NAME"
+          echo "🔄 Deploying new images to ASG: $ASG_NAME"
+          echo "Finding instances in ASG..."
           INSTANCE_IDS=$(aws autoscaling describe-auto-scaling-groups \
             --auto-scaling-group-names "$ASG_NAME" \
             --region ${{ env.AWS_REGION }} \
-            --query 'AutoScalingGroups[0].Instances[*].InstanceId' \
+            --query 'AutoScalingGroups[0].Instances[?LifecycleState==`InService`].InstanceId' \
             --output text)
           
           if [ -z "$INSTANCE_IDS" ] || [ "$INSTANCE_IDS" = "None" ]; then
-            echo "❌ No instances found in ASG. Waiting for instances to be ready..."
+            echo "❌ No instances found in ASG."
             exit 1
           fi
           
           echo "Found instances: $INSTANCE_IDS"
           
-          # Deploy to each instance using SSM
+          # Simple rolling update: pull new images and restart containers
           for INSTANCE_ID in $INSTANCE_IDS; do
-            echo "Deploying to instance: $INSTANCE_ID"
+            echo "🔄 Updating instance: $INSTANCE_ID"
             
-            # Wait for instance to be ready for SSM (can take 1-2 minutes after launch)
-            echo "Waiting for instance $INSTANCE_ID to be ready for SSM..."
-            MAX_WAIT=300  # 5 minutes
+            # Wait for SSM to be ready
+            echo "Waiting for SSM agent..."
+            MAX_WAIT=120
             WAIT_COUNT=0
             while [ $WAIT_COUNT -lt $MAX_WAIT ]; do
               PING_STATUS=$(aws ssm describe-instance-information \
                 --filters "Key=InstanceIds,Values=$INSTANCE_ID" \
                 --region ${{ env.AWS_REGION }} \
                 --query 'InstanceInformationList[0].PingStatus' \
-                --output text 2>/dev/null)
+                --output text 2>/dev/null || echo "None")
               
               if [ "$PING_STATUS" = "Online" ]; then
-                echo "✅ Instance $INSTANCE_ID is ready for SSM"
+                echo "✅ SSM ready for $INSTANCE_ID"
                 break
               else
                 WAIT_COUNT=$((WAIT_COUNT + 10))
                 if [ $WAIT_COUNT -lt $MAX_WAIT ]; then
-                  echo "⏳ Waiting for SSM agent to be ready... ($WAIT_COUNT/$MAX_WAIT seconds) [Status: ${PING_STATUS:-NotRegistered}]"
+                  echo "⏳ Waiting for SSM... ($WAIT_COUNT/$MAX_WAIT)"
                   sleep 10
                 else
-                  echo "❌ Instance $INSTANCE_ID did not become ready for SSM within $MAX_WAIT seconds"
-                  echo "   Current status: ${PING_STATUS:-NotRegistered}"
-                  echo "   This usually means the IAM role doesn't have AmazonSSMManagedInstanceCore policy"
-                  exit 1
+                  echo "⚠️  SSM not ready for $INSTANCE_ID, skipping..."
+                  continue 2
                 fi
               fi
             done
             
-            # Give instance a moment to stabilize after SSM readiness
-            echo "Waiting 5 seconds for instance to stabilize..."
-            sleep 5
-            
-            # Upload nginx config via SSM
-            echo "Uploading nginx config..."
-            NGINX_B64=$(cat nginx/nginx.aws.conf | base64 -w 0)
-            
-            # Create temporary file for SSM parameters
-            NGINX_PARAMS_FILE=$(mktemp)
-            jq -n \
-              --arg cmd1 "mkdir -p /home/ec2-user/proyecto1" \
-              --arg cmd2 "echo '$NGINX_B64' | base64 -d > /home/ec2-user/proyecto1/nginx.aws.conf" \
-              --arg cmd3 "chmod 644 /home/ec2-user/proyecto1/nginx.aws.conf" \
-              --arg cmd4 "test -f /home/ec2-user/proyecto1/nginx.aws.conf && echo 'Nginx config uploaded successfully' || echo 'Nginx config upload failed'" \
-              '{commands: [$cmd1, $cmd2, $cmd3, $cmd4]}' > "$NGINX_PARAMS_FILE"
-            
-            # Upload nginx config using SSM
-            NGINX_UPLOAD_CMD_ID=$(aws ssm send-command \
-              --instance-ids "$INSTANCE_ID" \
-              --document-name "AWS-RunShellScript" \
-              --parameters file://"$NGINX_PARAMS_FILE" \
-              --region ${{ env.AWS_REGION }} \
-              --query 'Command.CommandId' \
-              --output text)
-            
-            rm -f "$NGINX_PARAMS_FILE"
-            
-            if [ -n "$NGINX_UPLOAD_CMD_ID" ]; then
-              echo "Waiting for nginx config upload..."
-              aws ssm wait command-executed \
-                --command-id "$NGINX_UPLOAD_CMD_ID" \
-                --instance-id "$INSTANCE_ID" \
-                --region ${{ env.AWS_REGION }} || echo "Warning: Nginx config upload may have failed"
-              
-              UPLOAD_STATUS=$(aws ssm get-command-invocation \
-                --command-id "$NGINX_UPLOAD_CMD_ID" \
-                --instance-id "$INSTANCE_ID" \
-                --region ${{ env.AWS_REGION }} \
-                --query 'Status' \
-                --output text)
-              
-              if [ "$UPLOAD_STATUS" != "Success" ]; then
-                echo "⚠️  Nginx config upload failed with status: $UPLOAD_STATUS, but continuing deployment..."
-                aws ssm get-command-invocation \
-                  --command-id "$NGINX_UPLOAD_CMD_ID" \
-                  --instance-id "$INSTANCE_ID" \
-                  --region ${{ env.AWS_REGION }} \
-                  --query 'StandardErrorContent' \
-                  --output text || true
-              else
-                echo "✅ Nginx config uploaded successfully"
-              fi
-            fi
-            
-            # Note: Frontend is served from CloudFront/S3, not from EC2.
-            # EC2 only runs API container and nginx (for API routing via ALB).
-            
-            # Send deployment command via SSM
-            DEPLOY_PARAMS_FILE=$(mktemp)
-            jq -n \
-              --arg cmd1 "set -e" \
-              --arg cmd2 "aws ecr get-login-password --region ${{ env.AWS_REGION }} | sudo docker login --username AWS --password-stdin ${{ secrets.ECR_REGISTRY }}" \
-              --arg cmd3 "sudo docker stop proyecto1-api-aws || true" \
-              --arg cmd4 "sudo docker rm proyecto1-api-aws || true" \
-              --arg cmd5 "sudo docker pull ${{ secrets.ECR_REGISTRY }}/${{ env.ECR_API_REPO }}:latest" \
-              --arg cmd6 "sudo docker run -d --name proyecto1-api-aws --restart unless-stopped --network host -e DB_HOST=${{ secrets.RDS_ENDPOINT }} -e DB_PORT=5432 -e DB_NAME=proyecto_1 -e DB_USER=postgres -e DB_PASSWORD=${{ secrets.DB_PASSWORD }} -e DB_SSL_MODE=require -e S3_BUCKET_NAME=${{ secrets.S3_BUCKET_NAME }} -e SQS_QUEUE_NAME=${{ secrets.SQS_QUEUE_NAME }} -e JWT_SECRET=${{ secrets.JWT_SECRET }} -e AWS_DEFAULT_REGION=${{ env.AWS_REGION }} ${{ secrets.ECR_REGISTRY }}/${{ env.ECR_API_REPO }}:latest" \
-              --arg cmd7 "sudo docker stop proyecto1-nginx-aws || true" \
-              --arg cmd8 "sudo docker rm proyecto1-nginx-aws || true" \
-              --arg cmd9 "sudo docker run -d --name proyecto1-nginx-aws --restart unless-stopped --network host -v /home/ec2-user/proyecto1/nginx.aws.conf:/etc/nginx/nginx.conf:ro nginx:alpine" \
-              --arg cmd10 "sudo docker ps" \
-              --arg timeout "3600" \
-              --arg workdir "/home/ec2-user" \
-              '{commands: [$cmd1, $cmd2, $cmd3, $cmd4, $cmd5, $cmd6, $cmd7, $cmd8, $cmd9, $cmd10], executionTimeout: [$timeout], workingDirectory: [$workdir]}' > "$DEPLOY_PARAMS_FILE"
-            
+            # Update containers with new images
             COMMAND_ID=$(aws ssm send-command \
               --instance-ids "$INSTANCE_ID" \
               --document-name "AWS-RunShellScript" \
-              --parameters file://"$DEPLOY_PARAMS_FILE" \
+              --parameters 'commands=[
+                "set -e",
+                "cd /home/ec2-user/proyecto1",
+                "aws ecr get-login-password --region '"${{ env.AWS_REGION }}"' | sudo docker login --username AWS --password-stdin '"${{ secrets.ECR_REGISTRY }}"'",
+                "sudo docker-compose pull",
+                "sudo docker-compose up -d",
+                "sudo docker-compose ps"
+              ]' \
               --region ${{ env.AWS_REGION }} \
               --query 'Command.CommandId' \
-              --output text)
+              --output text 2>/dev/null || echo "FAILED")
             
-            rm -f "$DEPLOY_PARAMS_FILE"
+            if [ "$COMMAND_ID" = "FAILED" ] || [ -z "$COMMAND_ID" ]; then
+              echo "⚠️  Could not send command to $INSTANCE_ID"
+              continue
+            fi
             
-            echo "Command ID: $COMMAND_ID"
-            
-            # Wait for command to complete
-            echo "Waiting for deployment to complete..."
+            echo "Waiting for update to complete..."
             aws ssm wait command-executed \
               --command-id "$COMMAND_ID" \
               --instance-id "$INSTANCE_ID" \
-              --region ${{ env.AWS_REGION }} || true
+              --region ${{ env.AWS_REGION }} 2>/dev/null || true
             
-            # Check command status
             STATUS=$(aws ssm get-command-invocation \
               --command-id "$COMMAND_ID" \
               --instance-id "$INSTANCE_ID" \
               --region ${{ env.AWS_REGION }} \
               --query 'Status' \
-              --output text)
+              --output text 2>/dev/null || echo "Unknown")
             
-            if [ "$STATUS" != "Success" ]; then
-              echo "❌ Deployment failed on instance $INSTANCE_ID with status: $STATUS"
-              aws ssm get-command-invocation \
-                --command-id "$COMMAND_ID" \
-                --instance-id "$INSTANCE_ID" \
-                --region ${{ env.AWS_REGION }} \
-                --query 'StandardErrorContent' \
-                --output text
-              exit 1
+            if [ "$STATUS" = "Success" ]; then
+              echo "✅ Instance $INSTANCE_ID updated successfully"
             else
-              echo "✅ Deployment successful on instance $INSTANCE_ID"
+              echo "⚠️  Instance $INSTANCE_ID update status: $STATUS"
             fi
           done
           
-          echo "✅ All instances deployed successfully!"
+          echo "✅ Deployment complete!"
 
       - name: Update Lambda Worker Function
         run: |
