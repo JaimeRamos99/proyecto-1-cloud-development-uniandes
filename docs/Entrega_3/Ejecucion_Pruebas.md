@@ -151,8 +151,27 @@ Flujo de Upload (segundos)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━
 Nuevo pipeline más seguro y modular → requiere ajustes de performance
 
+# Reportes
 
----
+- [Carga Funcional](/docs/Entrega_3/reportes_pdf/funcional/funcional.pdf)
+- [Carga Normal](/docs/Entrega_3/reportes_pdf/carga-normal/carga-normal.pdf)
+- [Carga Estres Moderado](/docs/Entrega_3/reportes_pdf/estres/stress-moderate.pdf)
+- [Carga Estres Intenso](/docs/Entrega_3/reportes_pdf/estres/stress-intense.pdf)
 
-**Preparado por:** Equipo de Performance Testing  
-**Fecha:** 15 de Noviembre, 2025
+Para poder ver el reporte completo se recomienda descomprimir las carpetas y ejecutar el html con los siguientes comandos.
+
+``` shell
+cd docs/Entrega_3/pruebas-de-carga/reportes/
+
+unzip funcional.zip
+open funcional/html_20251115_171654/index.html   
+
+unzip carga-normal.zip
+open carga-normal/html_20251115_171654/index.html   
+
+unzip estres.zip
+open estres/html_moderate_20251115_172815/index.html   
+open estres/html_intense_20251115_172815/index.html   
+
+```
+

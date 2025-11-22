@@ -227,4 +227,3 @@ Los rankings se actualizan **automáticamente** después de cada voto/unvote:
 
 ---
 
-**¡Documentación completa, API lista para usar! 🚀**
