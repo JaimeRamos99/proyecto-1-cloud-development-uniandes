@@ -7,40 +7,32 @@
 | Jaime Josue Ramos Rossetes     | jj.ramosr1@uniandes.edu.co |
 | Marilyn Stephany Joven Fonseca | m.joven@uniandes.edu.co    |
 
-## 🚀 Inicio Rápido
 
-Este proyecto utiliza **Makefile** para simplificar el desarrollo. Se recomienda usar los comandos make en lugar de docker-compose directamente.
+Este proyecto presenta una solución cloud-native diseñada para subir, procesar y publicar videos de manera eficiente, escalable y segura.
 
-### Comandos Principales
+Los reportes incluidos documentan la transición completa entre versiones, detallando diseño, decisiones técnicas, despliegues y mejoras progresivas. En este README se encuentran enlaces a cada entrega de arquitectura, así como la documentación de la API implementada.
 
-```bash
-# Ver todos los comandos disponibles
-make help
+El proyecto se construyó siguiendo principios del AWS Well-Architected Framework y adoptando prácticas modernas como separación de responsabilidades, escalamiento automático, infraestructura como código, uso de contenedores, procesamiento asíncrono y entrega global mediante CDN.
 
-# Iniciar todo el entorno local (recomendado)
-make local
+En conjunto, los reportes explican cómo se implementaron los siguientes pilares:
 
-# Ver logs de todos los servicios
-make logs
+- Separación total entre frontend y backend
+- Migración del frontend a S3 + CloudFront
+- Backend distribuido detrás de un Application Load Balancer
+- Auto Scaling Group para alta disponibilidad y resiliencia
+- Contenedores almacenados en ECR para despliegues reproducibles
+- Worker evolucionando desde EC2 tradicional hacia Lambda serverless
+- Procesamiento asíncrono basado en SQS
+- Presigned URLs para subir videos directamente a S3
+- Seguridad reforzada con IAM, SGs y VPC endpoints
+- Infraestructura declarativa en Terraform
+- Pipeline CI/CD completo para API, worker y frontend
+- Monitoreo centralizado con CloudWatch
+- Organización avanzada del almacenamiento en S3
+- Optimización de costos mediante lifecycle policies
+- Base de datos RDS con backups automáticos
+- Worker con paralelización y tiempos de ejecución controlados
 
-# Verificar estado de salud de servicios
-make health
-
-# Detener todos los contenedores
-make stop
-
-# Limpieza completa (elimina todo)
-make clean
-```
-
-### Servicios Disponibles
-
-Una vez ejecutado `make local`:
-
-- **🌐 API**: http://localhost:80/api
-- **📚 Documentación**: http://localhost:8080
-- **🗄️ PostgreSQL**: localhost:5432
-- **☁️ LocalStack**: http://localhost:4566
 
 ### Documentación
 
@@ -61,3 +53,20 @@ Toda la documentación para la Entrega 2 del proyecto se encuentra en `docs/Entr
 - **Pruebas de carga** - Ejecución de las pruebas de carga
 - **Reportes PDF** - Resumen de los reportes de las pruebas de Funcionalidad, Carga Normal y Estrés.
 
+
+Toda la documentación para la Entrega 3 del proyecto se encuentra en `docs/Entrega_3/`:
+
+- **Documentacion Arquitectura** - Explicación del diseño de la arquitectura.
+- **Documentacion Pruebas** - Procedimiento y explicación de la estructura de las pruebas de carga.
+- **Pruebas de carga** - Ejecución de las pruebas de carga
+- **Reportes PDF** - Resumen de los reportes de las pruebas de Funcionalidad, Carga Normal y Estrés.
+
+
+
+Toda la documentación para la Entrega 4 y 5 del proyecto se encuentra en `docs/Entrega_4_5/`:
+
+- **Diagrama de Arquitectura** - Arquitectura final
+- **Documentacion Arquitectura** - Explicación del diseño de la arquitectura.
+- **Documentacion Pruebas** - Procedimiento y explicación de la estructura de las pruebas de carga.
+- **Pruebas de carga** - Ejecución de las pruebas de carga
+- **Reportes PDF** - Resumen de los reportes de las pruebas de Funcionalidad, Carga Normal y Estrés.
